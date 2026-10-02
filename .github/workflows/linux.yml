@@ -28,8 +28,17 @@ permissions:
 # Off until a first build has been checked by hand: run this workflow manually,
 # download the Coucou-Linux artifact, try it, then set this to 'true' and push a
 # linux-v* tag.
+#
+# ASSETS_LICENSED_FOR_DISTRIBUTION gates every upload below, including the
+# workflow_dispatch artifacts (those go out regardless of PUBLISH). The build
+# still bundles the upstream project's sounds (vite.config.ts copies them from
+# NotchBuddy/Resources/sounds/) and character design under the name "Coucou" —
+# all reserved by LICENSE-ASSETS.md, not covered by the MIT license. Leave
+# this 'false' until this fork ships its own name, icon, character and sounds,
+# or has written permission from the upstream author.
 env:
   PUBLISH: 'false'
+  ASSETS_LICENSED_FOR_DISTRIBUTION: 'false'
 
 jobs:
   build:
@@ -117,13 +126,15 @@ jobs:
 
       - name: Decide whether to publish
         id: gate
-        run: echo "publish=${{ github.event_name == 'push' && env.PUBLISH == 'true' && startsWith(github.ref, 'refs/tags/linux-v') }}" >> "$GITHUB_OUTPUT"
+        run: echo "publish=${{ env.ASSETS_LICENSED_FOR_DISTRIBUTION == 'true' && github.event_name == 'push' && env.PUBLISH == 'true' && startsWith(github.ref, 'refs/tags/linux-v') }}" >> "$GITHUB_OUTPUT"
 
-      # Upload only on a manual run or when publishing a release, as on Windows.
-      # The repo is public, so artifacts are downloadable by any signed-in GitHub
-      # user; retention-days: 3 limits exposure.
+      # Upload only on a manual run or when publishing a release, as on Windows,
+      # and only once ASSETS_LICENSED_FOR_DISTRIBUTION says this build's name,
+      # icon, character and sounds are actually ours to ship (see the env block
+      # above). The repo is public, so artifacts are downloadable by any
+      # signed-in GitHub user; retention-days: 3 limits exposure.
       - uses: actions/upload-artifact@v4
-        if: github.event_name == 'workflow_dispatch' || steps.gate.outputs.publish == 'true'
+        if: env.ASSETS_LICENSED_FOR_DISTRIBUTION == 'true' && (github.event_name == 'workflow_dispatch' || steps.gate.outputs.publish == 'true')
         with:
           name: Coucou-Linux
           path: |

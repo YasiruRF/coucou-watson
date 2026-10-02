@@ -37,3 +37,16 @@ bash scripts/test-screen-geometry.sh
 
 - One topic per PR, with a short GIF or screenshot for anything visual.
 - Build must pass with no new warnings.
+
+## Licensing
+
+The MIT license covers the code. It does **not** cover the name "Coucou", the
+character's design/look/animations, the app icon, or the sounds — those stay
+Louis Raillé's, see [LICENSE-ASSETS.md](LICENSE-ASSETS.md). This fork still
+uses all four (renamed to "Wato" in code and docs, but same design, same
+sounds, same "Coucou" product name), so the Windows/Linux CI workflows keep
+`ASSETS_LICENSED_FOR_DISTRIBUTION: 'false'` and will not upload or publish a
+build, by hand or on a tag, until that's no longer true — i.e. until this fork
+has its own name, icon, character design and sounds, or written permission
+from the upstream author. Building and running it yourself from source is
+fine in the meantime; don't flip that flag or hand out a built installer.

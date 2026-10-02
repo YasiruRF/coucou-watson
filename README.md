@@ -194,7 +194,7 @@ Inspired by the notch-companion concepts shared by design studios — this proje
 ## License
 
 - **Code:** [MIT](LICENSE) — use it, fork it, learn from it, just keep the copyright notice.
-- **Name, Wato character, icon, sounds and media:** © Louis Raillé, all rights reserved — see [LICENSE-ASSETS.md](LICENSE-ASSETS.md). Shipping your own fork? Give it your own name and character.
+- **Name, Mochi character, icon, sounds and media:** © Louis Raillé, all rights reserved — see [LICENSE-ASSETS.md](LICENSE-ASSETS.md). Shipping your own fork? Give it your own name and character. (This fork renamed the character to "Wato" in code and docs, but hasn't changed its design, icon, sounds or the "Coucou" name yet — see [CONTRIBUTING.md#licensing](CONTRIBUTING.md#licensing).)
 
 <div align="center">
 
