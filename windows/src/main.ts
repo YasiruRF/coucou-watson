@@ -53,6 +53,10 @@ async function main() {
 
   await onEvent<null>("screen-changed", () => void Bridge.reposition());
 
+  // Rust sees every press, even the ones the click-through window never receives.
+  await onEvent<null>("outside-click", () => island.onOutsideClick());
+  await onEvent<{ moved: boolean }>("ball-released", ({ moved }) => island.onBallReleased(moved));
+
   // The settings window writes preferences; apply them here without a restart.
   await onEvent<Settings>("settings-changed", (s) => {
     State.settings = { ...State.settings, ...s };
@@ -65,6 +69,10 @@ async function main() {
   registerIntegrationHandlers(island);
 
   island.launch();
+
+  // Vite dev server only: lets the island be driven from the console / browser
+  // tooling (`__coucou.State.appendStep(...)`). Stripped from production builds.
+  if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__coucou = { island, State };
 
   // In a plain browser there is no wake strip behind the cursor: make the whole
   // page wake the island so the visuals can be checked with `npm run dev`.

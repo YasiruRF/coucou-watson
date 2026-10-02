@@ -77,7 +77,8 @@ export class Ticker {
   private c = makeRow(); // incoming
   private queue: string[] = [];
   private startMs: number | null = null;
-  private displayIndex = -1;
+  /** Steps seen so far, by running total — the steps array is capped, so an index can't tell. */
+  private seen = -1;
 
   constructor() {
     this.el = h("div", { class: "ticker" }, this.a.el, this.b.el, this.c.el);
@@ -98,29 +99,29 @@ export class Ticker {
   sync(task: AgentTask | null) {
     const steps = task && task.steps.length > 0 ? task.steps : ["…"];
     const idx = task ? Math.min(task.stepIndex, steps.length - 1) : -1;
+    // `stepCount` is the running total; `steps` only keeps the last 20, so once
+    // it is full the index stops moving and only the total says a step arrived.
+    const total = task ? (task.stepCount ?? task.steps.length) : 0;
 
-    // First render: drop straight into place, no animation.
-    if (this.displayIndex < 0) {
-      this.displayIndex = idx;
-      setText(this.a, idx > 0 ? steps[idx - 1] : "…");
-      setText(this.b, steps[Math.max(idx, 0)]);
-      this.rest();
-      return;
-    }
-
-    // The session restarted (steps were cleared): re-seed rather than scroll.
-    if (idx < this.displayIndex) {
+    const reseed = () => {
       this.queue = [];
       this.startMs = null;
-      this.displayIndex = idx;
+      this.seen = total;
       setText(this.a, idx > 0 ? steps[idx - 1] : "…");
       setText(this.b, steps[Math.max(idx, 0)]);
       this.rest();
+    };
+
+    // First render: drop straight into place, no animation.
+    // The session restarted (steps were cleared): re-seed rather than scroll.
+    if (this.seen < 0 || total < this.seen) {
+      reseed();
       return;
     }
 
-    for (let i = this.displayIndex + 1; i <= idx; i++) this.queue.push(steps[i]);
-    this.displayIndex = idx;
+    const added = Math.min(total - this.seen, steps.length);
+    for (let i = steps.length - added; i < steps.length; i++) this.queue.push(steps[i]);
+    this.seen = total;
     if (this.queue.length > MAX_QUEUE) {
       this.queue = this.queue.slice(-MAX_QUEUE);
     }

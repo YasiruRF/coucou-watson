@@ -4,7 +4,7 @@
 import { Tracked, Spring, clamp } from "../core/anim";
 import { Bridge, IS_TAURI, onDragDrop } from "../core/bridge";
 import {
-  EXPANDED_CORNER, EXPANDED_W, NOTCH_W, PANEL_H, PANEL_W,
+  BALL_SIZE, BALL_WINDOW, EXPANDED_CORNER, EXPANDED_W, NOTCH_W, PANEL_H, PANEL_W,
   ROUNDED_CORNER, VIEW_LAYOUTS, botGlowColor, botGlowOpacity, botPosition, chatPromptHeight,
   islandSize,
   type IslandMode, type IslandViewName,
@@ -30,7 +30,7 @@ const UPLOAD_VIEWS: ReadonlySet<IslandViewName> = new Set(["upload", "uploading"
 /** Seconds between the drop and the moment the progress bar starts filling. */
 const PRE_PROGRESS = USC.T_PROG_START - USC.T_DROP;
 
-const modeOrder = (m: IslandMode) => (m === "hidden" ? 0 : m === "compact" ? 1 : 2);
+const modeOrder = (m: IslandMode) => (m === "hidden" ? 0 : m === "compact" || m === "ball" ? 1 : 2);
 
 export class Island {
   readonly fsm = new IslandStateMachine();
@@ -65,6 +65,8 @@ export class Island {
   private lastFrame = 0;
   private dirty = true;
   private canvasPx = 0;
+  /** Width of the OS window: the full panel, or the small one while Mochi is a ball. */
+  private winW = PANEL_W;
 
   // Rust starts the window at full size so the launch greeting has room.
   private collapsed = false;
@@ -225,10 +227,14 @@ export class Island {
 
   private wireFsm() {
     this.fsm.homeToPetitDelay = State.settings.autoCloseInterval;
+    this.fsm.isIdle = () => !State.hasActiveSession;
     this.fsm.onTransition = (from, to) => {
       switch (to) {
         case "hidden":
           this.setMode("hidden");
+          break;
+        case "ball":
+          this.setMode("ball");
           break;
         case "petit":
           if (from === "coucou") this.greeting.interrupt();
@@ -266,6 +272,17 @@ export class Island {
       State.isPinned = false;
       void Bridge.focusWindow(false);
     }
+    // The ball lives in a small window of its own; give the panel back before
+    // anything else is drawn into it, and shrink it before the ball is.
+    if (prev === "ball") {
+      this.winW = PANEL_W;
+      void Bridge.setBall(false);
+    }
+    if (mode === "ball") {
+      this.winW = BALL_WINDOW;
+      void Bridge.setBall(true);
+      Sound.play("peek");
+    }
     if (mode !== "expanded") {
       this.engine.resetMorph();
       // Nothing can be seen of the sequence once the island is shut, and leaving
@@ -274,8 +291,25 @@ export class Island {
       UploadSeq.deactivate();
     }
     this.updateWindowCollapsed();
-    this.animateGeometry(modeOrder(mode) < modeOrder(prev));
+    if (mode === "ball") this.snapToBall();
+    else this.animateGeometry(modeOrder(mode) < modeOrder(prev));
     State.notify();
+  }
+
+  /**
+   * The window has just shrunk to the ball's size, so there is nothing to
+   * animate from: the old shape would be clipped to nothing. Land on the ball.
+   */
+  private snapToBall() {
+    const { w, h, r } = this.targetSize();
+    this.width.jump(w);
+    this.height.jump(h);
+    this.radius.jump(r);
+    const p = botPosition("ball", State.view, h);
+    this.botCx.set(p.cx);
+    this.botCy.set(p.cy);
+    this.botSize.set(p.diameter / 0.6);
+    this.ensureRunning();
   }
 
   /** True while the drop sequence owns the island body. */
@@ -332,6 +366,26 @@ export class Island {
 
   reveal() {
     this.fsm.reveal();
+  }
+
+  /**
+   * A press landed off the island (reported by Rust: the window is click-through
+   * there). An open island folds back to the notch; an alert that is waiting for
+   * an answer stays, as it does for Escape.
+   */
+  onOutsideClick() {
+    if (State.mode !== "expanded" || State.isPinned) return;
+    this.collapse();
+  }
+
+  /** The button came up after a press on the ball. A tap opens the island; a drag just moved it. */
+  onBallReleased(moved: boolean) {
+    if (State.mode !== "ball") return;
+    if (!moved) {
+      this.fsm.forceHome();
+      return;
+    }
+    this.fsm.ballTouched(this.wasInIsland);
   }
 
   /** An alert stopped waiting for an answer: let the island auto-close again. */
@@ -451,7 +505,8 @@ export class Island {
 
   private targetSize(): { w: number; h: number; r: number } {
     const { w, h } = islandSize(State.mode, State.view, State.chatHistory.length);
-    const r = State.mode === "expanded" ? EXPANDED_CORNER : ROUNDED_CORNER;
+    const r =
+      State.mode === "expanded" ? EXPANDED_CORNER : State.mode === "ball" ? BALL_SIZE / 2 : ROUNDED_CORNER;
     return { w, h, r };
   }
 
@@ -475,7 +530,9 @@ export class Island {
     const r = this.radius.value;
     this.islandEl.style.width = `${w}px`;
     this.islandEl.style.height = `${hh}px`;
-    this.islandEl.style.borderRadius = `0 0 ${r}px ${r}px`;
+    // Glued to the screen's top edge, so only the bottom corners round — except
+    // the ball, which floats free and is round all the way.
+    this.islandEl.style.borderRadius = State.mode === "ball" ? `${r}px` : `0 0 ${r}px ${r}px`;
     this.islandEl.style.transform = `translateX(-50%)`;
     // These follow the island as it resizes, so they belong here rather than in
     // the state-driven DOM sync.
@@ -484,7 +541,7 @@ export class Island {
     this.greetingCanvas.style.left = `${(w - EXPANDED_W) / 2}px`;
     this.uploadCanvas.el.style.left = `${(w - EXPANDED_W) / 2}px`;
 
-    const rect = { x: (PANEL_W - w) / 2, y: 0, w, h: hh };
+    const rect = { x: (this.winW - w) / 2, y: 0, w, h: hh };
     const p = this.pushedRect;
     if (Math.abs(p.x - rect.x) > 0.5 || Math.abs(p.w - rect.w) > 0.5 || Math.abs(p.h - rect.h) > 0.5) {
       this.pushedRect = rect;
@@ -496,7 +553,7 @@ export class Island {
   private islandRect(): { x: number; y: number; w: number; h: number } {
     const w = this.width.value;
     const hh = this.height.value;
-    return { x: (PANEL_W - w) / 2, y: 0, w, h: hh };
+    return { x: (this.winW - w) / 2, y: 0, w, h: hh };
   }
 
   // ── Window collapse (hidden → tiny wake strip, zero polling) ────────────────
@@ -534,6 +591,13 @@ export class Island {
     this.islandEl.addEventListener("mousedown", (e) => {
       Sound.resume();
       State.lastActivity = performance.now();
+      if (State.mode === "ball") {
+        // Picked up: hold off the trip back to the notch, and let Rust drag the
+        // window. Whether this was a drag or a tap comes back as `ball-released`.
+        this.fsm.ballTouched(true);
+        void Bridge.ballDragStart();
+        return;
+      }
       if (State.mode !== "expanded") {
         this.fsm.click();
         return;
@@ -729,11 +793,15 @@ export class Island {
     // spends most of its life in. Geometry still has to finish retracting.
     const settling =
       this.width.animating || this.height.animating || this.radius.animating;
+    // A view mid-animation (the overview ticker) must keep the loop awake too:
+    // it is driven by this loop's clock, so a sleeping loop freezes it half-way
+    // between two steps, with the incoming row stacked on the current one.
     const busy = State.mode === "hidden"
       ? settling
       : settling ||
         !this.botCx.settled || !this.botCy.settled || !this.botSize.settled ||
-        greetingActive || this.engine.busy || UploadSeq.isActive;
+        greetingActive || this.engine.busy || UploadSeq.isActive ||
+        (this.views.get(State.view)?.busy?.() ?? false);
 
     if (busy) {
       requestAnimationFrame(this.frame);
@@ -836,6 +904,7 @@ export class Island {
     const expanded = State.mode === "expanded";
     const greetingActive = expanded && State.view === "greeting";
 
+    this.islandEl.classList.toggle("ball", State.mode === "ball");
     this.contentEl.style.opacity = expanded && !greetingActive ? "1" : "0";
     this.contentEl.style.pointerEvents = expanded && !greetingActive ? "auto" : "none";
     this.greetingCanvas.style.display = greetingActive ? "block" : "none";

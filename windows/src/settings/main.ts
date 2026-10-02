@@ -3,7 +3,7 @@
 // integrations land here too in a later stage.
 
 import "./settings.css";
-import { Bridge, onEvent, type HookStatus } from "../core/bridge";
+import { Bridge, onEvent, type HookStatus, type HookPreview, type ModelInfo } from "../core/bridge";
 import { DEFAULT_SETTINGS, type Settings } from "../core/state";
 import { h, clear } from "../views/dom";
 
@@ -41,35 +41,47 @@ function renderDiff(text: string): HTMLElement {
   return box;
 }
 
-// ── Claude Code section ───────────────────────────────────────────────────────
+// ── Hook sections (Claude Code, Antigravity) ────────────────────────────────
+// Same three-step contract on both: preview the exact diff, back up, write only
+// on an explicit click. `hookSection` is that flow; each caller only supplies
+// its own wording and which Bridge calls to use.
 
-function claudeSection(status: HookStatus): HTMLElement {
+interface HookSectionCopy {
+  title: string;
+  installed: string;
+  notInstalled: string;
+  relayMissing: string;
+  installLabel: string;
+  reinstallLabel: string;
+  uninstallLabel: string;
+  previewInstall: string;
+  previewUninstall: string;
+  doneText: (backup: string) => string;
+}
+
+interface HookSectionApi {
+  status: () => Promise<HookStatus | null>;
+  preview: (install: boolean) => Promise<HookPreview>;
+  apply: (install: boolean, fingerprint: string) => Promise<string>;
+}
+
+function hookSection(copy: HookSectionCopy, api: HookSectionApi, status: HookStatus): HTMLElement {
   const body = h("div", { style: "display:flex;flex-direction:column;gap:12px" });
-  const section = h(
-    "section",
-    {},
-    h("h2", {}, statusDot(status.installed), h("span", { text: "Claude Code" })),
-    body,
-  );
+  const head = () => h("h2", {}, statusDot(status.installed), h("span", { text: copy.title }));
+  const section = h("section", {}, head(), body);
 
   const rebuild = async () => {
-    const fresh = await Bridge.hooksStatus();
+    const fresh = await api.status();
     if (fresh) Object.assign(status, fresh);
     clear(body);
     draw();
-    const head = section.querySelector("h2")!;
-    clear(head);
-    head.append(statusDot(status.installed), h("span", { text: "Claude Code" }));
+    const oldHead = section.querySelector("h2")!;
+    section.replaceChild(head(), oldHead);
   };
 
   function draw() {
     body.append(
-      h("div", {
-        class: "hint",
-        text: status.installed
-          ? "Coucou is hooked into your Claude Code sessions. Tool calls, questions and permission requests show up in the island, and you can answer them there."
-          : "Install the hooks to see your Claude Code sessions in the island and approve permissions without leaving what you are doing.",
-      }),
+      h("div", { class: "hint", text: status.installed ? copy.installed : copy.notInstalled }),
       h("div", { class: "row" },
         h("label", { text: "settings.json" }),
         h("span", { class: "path", text: status.settingsPath }),
@@ -82,31 +94,24 @@ function claudeSection(status: HookStatus): HTMLElement {
     );
 
     if (!status.hookReady) {
-      body.append(h("div", {
-        class: "notice warn",
-        text: "coucou-hook.exe is not in place yet. Restart Coucou; if it still fails, build it with `cargo build -p coucou-hook`.",
-      }));
+      body.append(h("div", { class: "notice warn", text: copy.relayMissing }));
     }
 
     const actions = h("div", { class: "row" });
     const install = h("button", {
       class: "primary",
-      text: status.installed ? "Reinstall hooks…" : "Install hooks…",
+      text: status.installed ? copy.reinstallLabel : copy.installLabel,
       onclick: () => showPreview(true),
     });
     // Writing hook commands that point at a relay which isn't there would give
-    // every Claude Code session a broken hook and nothing to show for it.
+    // every session a broken hook and nothing to show for it.
     if (!status.hookReady) {
       install.disabled = true;
       install.title = "The relay isn't installed yet.";
     }
     actions.append(install);
     if (status.installed) {
-      actions.append(h("button", {
-        class: "danger",
-        text: "Uninstall hooks…",
-        onclick: () => showPreview(false),
-      }));
+      actions.append(h("button", { class: "danger", text: copy.uninstallLabel, onclick: () => showPreview(false) }));
     }
     body.append(actions);
   }
@@ -114,33 +119,22 @@ function claudeSection(status: HookStatus): HTMLElement {
   async function showPreview(install: boolean) {
     let preview;
     try {
-      preview = await Bridge.hooksPreview(install);
+      preview = await api.preview(install);
     } catch (err) {
-      // An unreadable or invalid settings.json stops here rather than being
-      // treated as empty and written over.
+      // An unreadable or invalid file stops here rather than being treated as
+      // empty and written over.
       clear(body);
       body.append(
         h("div", { class: "notice err", text: String(err).replace(/^Error:\s*/, "") }),
-        h("div", { class: "row" }, h("button", {
-          text: "Back",
-          onclick: () => { clear(body); draw(); },
-        })),
+        h("div", { class: "row" }, h("button", { text: "Back", onclick: () => { clear(body); draw(); } })),
       );
       return;
     }
-    if (!preview) return;
     clear(body);
     body.append(
-      h("div", {
-        class: "hint",
-        text: install
-          ? "This is exactly what will change in your settings.json. Your own hooks are left untouched."
-          : "This removes Coucou's entries only. Your own hooks are left untouched.",
-      }),
+      h("div", { class: "hint", text: install ? copy.previewInstall : copy.previewUninstall }),
       renderDiff(preview.diff),
-      h("div", { class: "row" },
-        h("span", { class: "path", text: `Backup → ${preview.backup}` }),
-      ),
+      h("div", { class: "row" }, h("span", { class: "path", text: `Backup → ${preview.backup}` })),
     );
     const confirm = h("button", {
       class: install ? "primary" : "danger",
@@ -149,59 +143,94 @@ function claudeSection(status: HookStatus): HTMLElement {
     confirm.addEventListener("click", async () => {
       confirm.disabled = true;
       try {
-        const backup = await Bridge.hooksApply(install, preview.fingerprint);
+        const backup = await api.apply(install, preview.fingerprint);
         clear(body);
-        body.append(h("div", {
-          class: "notice ok",
-          text: `Done. Previous settings saved as ${backup}. Open a new Claude Code session to pick the hooks up.`,
-        }));
+        body.append(h("div", { class: "notice ok", text: copy.doneText(backup) }));
         window.setTimeout(() => void rebuild(), 2600);
       } catch (err) {
         confirm.disabled = false;
         body.append(h("div", { class: "notice err", text: `Could not write: ${String(err)}` }));
       }
     });
-    body.append(h("div", { class: "row" }, confirm, h("button", {
-      text: "Cancel",
-      onclick: () => { clear(body); draw(); },
-    })));
+    body.append(h("div", { class: "row" }, confirm, h("button", { text: "Cancel", onclick: () => { clear(body); draw(); } })));
   }
 
   draw();
   return section;
 }
 
-// ── Claude API section ────────────────────────────────────────────────────────
+function claudeSection(status: HookStatus): HTMLElement {
+  return hookSection(
+    {
+      title: "Claude Code",
+      installed: "Coucou is hooked into your Claude Code sessions. Tool calls, questions and permission requests show up in the island, and you can answer them there.",
+      notInstalled: "Install the hooks to see your Claude Code sessions in the island and approve permissions without leaving what you are doing.",
+      relayMissing: "coucou-hook.exe is not in place yet. Restart Coucou; if it still fails, build it with `cargo build -p coucou-hook`.",
+      installLabel: "Install hooks…",
+      reinstallLabel: "Reinstall hooks…",
+      uninstallLabel: "Uninstall hooks…",
+      previewInstall: "This is exactly what will change in your settings.json. Your own hooks are left untouched.",
+      previewUninstall: "This removes Coucou's entries only. Your own hooks are left untouched.",
+      doneText: (backup) => `Done. Previous settings saved as ${backup}. Open a new Claude Code session to pick the hooks up.`,
+    },
+    { status: Bridge.hooksStatus, preview: Bridge.hooksPreview, apply: Bridge.hooksApply },
+    status,
+  );
+}
 
-const MODELS: [string, string][] = [
-  ["claude-opus-5", "Claude Opus 5"],
-  ["claude-sonnet-5", "Claude Sonnet 5"],
-  ["claude-haiku-4-5", "Claude Haiku 4.5"],
+function agySection(status: HookStatus): HTMLElement {
+  return hookSection(
+    {
+      title: "Antigravity",
+      installed: "Coucou is hooked into Antigravity. Its sessions get their own pill in the island, next to Claude Code.",
+      notInstalled: "Install the hooks to see Antigravity's sessions in the island as their own pill.",
+      relayMissing: "coucou-hook.exe is not in place yet. Restart Coucou; if it still fails, build it with `cargo build -p coucou-hook`.",
+      installLabel: "Install hooks…",
+      reinstallLabel: "Reinstall hooks…",
+      uninstallLabel: "Uninstall hooks…",
+      previewInstall: "This is exactly what will change in ~/.gemini/config/hooks.json. Anything that isn't Coucou's is left untouched.",
+      previewUninstall: "This removes Coucou's entries only. Anything that isn't Coucou's is left untouched.",
+      doneText: (backup) => `Done. Previous file saved as ${backup}. Start a new Antigravity session to pick the hooks up.`,
+    },
+    { status: Bridge.agyHooksStatus, preview: Bridge.agyHooksPreview, apply: Bridge.agyHooksApply },
+    status,
+  );
+}
+
+// ── Chat section: Anthropic + Google AI keys, one model picker ─────────────────
+
+const CLAUDE_MODELS: ModelInfo[] = [
+  { id: "claude-opus-5", label: "Claude Opus 5" },
+  { id: "claude-sonnet-5", label: "Claude Sonnet 5" },
+  { id: "claude-haiku-4-5", label: "Claude Haiku 4.5" },
 ];
 
-function apiSection(hasKey: boolean): HTMLElement {
-  const dot = statusDot(hasKey);
-  const state = h("span", { class: "hint", text: hasKey ? "Key saved in the Windows Credential Manager." : "No key yet — the chat needs one." });
-
+/**
+ * One provider's API key row: status dot, password field, save/remove, its own
+ * feedback line. Anthropic and Google AI are two of these side by side.
+ */
+function apiKeyRow(opts: {
+  key: string;
+  placeholder: string;
+  hasKey: boolean;
+  onChange: () => void;
+}): { dot: HTMLElement; row: HTMLElement; feedback: HTMLElement } {
+  const dot = statusDot(opts.hasKey);
   const field = h("input", {
     type: "password",
-    placeholder: hasKey ? "••••••••••••  (stored)" : "sk-ant-...",
+    placeholder: opts.hasKey ? "••••••••••••  (stored)" : opts.placeholder,
     style: "flex:1 1 auto;min-width:0",
     autocomplete: "off",
     spellcheck: "false",
   }) as HTMLInputElement;
-
   const saveBtn = h("button", { class: "primary", text: "Save key" });
-  const clearBtn = h("button", { class: "danger", text: "Remove" });
+  const clearBtn = h("button", { class: "danger", text: "Remove", style: opts.hasKey ? "" : "display:none" });
   const feedback = h("div", {});
 
   async function refresh() {
-    const present = (await Bridge.secretPresent("anthropic-api-key")) ?? false;
+    const present = (await Bridge.secretPresent(opts.key)) ?? false;
     dot.style.background = present ? "#22c55e" : "#f4505e";
-    state.textContent = present
-      ? "Key saved in the Windows Credential Manager."
-      : "No key yet — the chat needs one.";
-    field.placeholder = present ? "••••••••••••  (stored)" : "sk-ant-...";
+    field.placeholder = present ? "••••••••••••  (stored)" : opts.placeholder;
     clearBtn.style.display = present ? "" : "none";
   }
 
@@ -210,10 +239,11 @@ function apiSection(hasKey: boolean): HTMLElement {
     if (!value) return;
     clear(feedback);
     try {
-      await Bridge.secretSet("anthropic-api-key", value);
+      await Bridge.secretSet(opts.key, value);
       field.value = "";
       feedback.append(h("div", { class: "notice ok", text: "Saved. It never touches disk." }));
       await refresh();
+      opts.onChange();
     } catch (err) {
       feedback.append(h("div", { class: "notice err", text: `Could not save: ${String(err)}` }));
     }
@@ -222,35 +252,74 @@ function apiSection(hasKey: boolean): HTMLElement {
   clearBtn.addEventListener("click", async () => {
     clear(feedback);
     try {
-      await Bridge.secretClear("anthropic-api-key");
+      await Bridge.secretClear(opts.key);
       feedback.append(h("div", { class: "notice ok", text: "Key removed." }));
       await refresh();
+      opts.onChange();
     } catch (err) {
       feedback.append(h("div", { class: "notice err", text: `Could not remove: ${String(err)}` }));
     }
   });
 
-  const model = h("select", {}) as HTMLSelectElement;
-  for (const [id, label] of MODELS) model.append(h("option", { value: id, text: label }));
-  if (!MODELS.some(([id]) => id === settings.model)) {
-    model.append(h("option", { value: settings.model, text: settings.model }));
+  return { dot, row: h("div", { class: "row" }, field, saveBtn, clearBtn), feedback };
+}
+
+function apiSection(hasAnthropicKey: boolean, hasGoogleKey: boolean, initialGoogleModels: ModelInfo[]): HTMLElement {
+  const modelSelect = h("select", {}) as HTMLSelectElement;
+  let googleModels = initialGoogleModels;
+
+  function rebuildModelOptions() {
+    clear(modelSelect);
+    const claudeGroup = h("optgroup", { label: "Claude" });
+    for (const m of CLAUDE_MODELS) claudeGroup.append(h("option", { value: m.id, text: m.label }));
+    modelSelect.append(claudeGroup);
+    if (googleModels.length > 0) {
+      const googleGroup = h("optgroup", { label: "Google AI — cheapest first" });
+      for (const m of googleModels) googleGroup.append(h("option", { value: m.id, text: m.label }));
+      modelSelect.append(googleGroup);
+    }
+    // The saved model may belong to a provider with no key configured yet (or
+    // whose list hasn't loaded): keep it selectable rather than silently losing it.
+    const known = [...CLAUDE_MODELS, ...googleModels].some((m) => m.id === settings.model);
+    if (!known) modelSelect.append(h("option", { value: settings.model, text: settings.model }));
+    modelSelect.value = settings.model;
   }
-  model.value = settings.model;
-  model.addEventListener("change", () => {
-    settings.model = model.value;
-    void save();
+
+  async function refreshGoogleModels() {
+    googleModels = (await Bridge.googleModels()) ?? [];
+    rebuildModelOptions();
+  }
+
+  const claude = apiKeyRow({
+    key: "anthropic-api-key",
+    placeholder: "sk-ant-...",
+    hasKey: hasAnthropicKey,
+    onChange: () => {},
+  });
+  const google = apiKeyRow({
+    key: "google-ai-api-key",
+    placeholder: "AIza...",
+    hasKey: hasGoogleKey,
+    onChange: () => void refreshGoogleModels(),
   });
 
-  clearBtn.style.display = hasKey ? "" : "none";
+  modelSelect.addEventListener("change", () => {
+    settings.model = modelSelect.value;
+    void save();
+  });
+  rebuildModelOptions();
 
   return h(
     "section",
     {},
-    h("h2", {}, dot, h("span", { text: "Claude" })),
-    state,
-    h("div", { class: "row" }, h("label", { text: "API key" }), field, saveBtn, clearBtn),
-    h("div", { class: "row" }, h("label", { text: "Model" }), model),
-    feedback,
+    h("h2", {}, h("span", { text: "Chat" })),
+    h("div", { class: "row" }, claude.dot, h("label", { text: "Claude API key" })),
+    claude.row,
+    claude.feedback,
+    h("div", { class: "row" }, google.dot, h("label", { text: "Google AI API key" })),
+    google.row,
+    google.feedback,
+    h("div", { class: "row" }, h("label", { text: "Model" }), modelSelect),
   );
 }
 
@@ -428,8 +497,13 @@ async function main() {
   const status = (await Bridge.hooksStatus()) ?? {
     installed: false, settingsPath: "", hookPath: "", hookReady: false,
   };
+  const agyStatus = (await Bridge.agyHooksStatus()) ?? {
+    installed: false, settingsPath: "", hookPath: "", hookReady: false,
+  };
 
-  const hasKey = (await Bridge.secretPresent("anthropic-api-key")) ?? false;
+  const hasAnthropicKey = (await Bridge.secretPresent("anthropic-api-key")) ?? false;
+  const hasGoogleKey = (await Bridge.secretPresent("google-ai-api-key")) ?? false;
+  const googleModels = hasGoogleKey ? ((await Bridge.googleModels()) ?? []) : [];
 
   const keys = [
     "stripe-api-key", "github-token", "vercel-token",
@@ -442,7 +516,8 @@ async function main() {
   root.append(
     h("h1", {}, h("span", { text: "Coucou" }), h("span", { class: "version", text: version })),
     claudeSection(status),
-    apiSection(hasKey),
+    agySection(agyStatus),
+    apiSection(hasAnthropicKey, hasGoogleKey, googleModels),
     integrationsSection(present),
     generalSection(),
     h("div", {

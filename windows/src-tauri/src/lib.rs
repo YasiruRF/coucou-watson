@@ -2,6 +2,8 @@
 
 mod claude;
 mod files;
+mod agy;
+mod google;
 mod hooks;
 mod integrations;
 mod island;
@@ -79,8 +81,7 @@ fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) {
         }
     }
     if screen_changed {
-        let collapsed = shared.gate.collapsed.load(Ordering::Relaxed);
-        island::apply_geometry(&app, &settings.screen, collapsed);
+        relayout(&app, &settings.screen, &shared.gate);
     }
     // Keep the other window in step (island ⇄ settings window).
     let _ = app.emit("settings-changed", settings);
@@ -96,6 +97,35 @@ fn set_collapsed(app: AppHandle, shared: State<Shared>, collapsed: bool) {
     // The wake strip must always take the mouse, and a resize invalidates the flag.
     island::refresh_click_through(&app, &shared.gate);
     shared.gate.set_active(!collapsed);
+}
+
+/// Puts the window where it belongs for the mode it is in: the floating ball,
+/// the invisible wake strip, or the full panel.
+fn relayout(app: &AppHandle, pref: &str, gate: &PollGate) {
+    if gate.ball.load(Ordering::Relaxed) {
+        island::apply_ball_geometry(app, pref, gate);
+    } else {
+        island::apply_geometry(app, pref, gate.collapsed.load(Ordering::Relaxed));
+    }
+}
+
+/// Mochi leaves the notch to float as a small ball (or comes back to the panel).
+/// The cursor poll keeps running either way: it is what drags the ball.
+#[tauri::command]
+fn set_ball(app: AppHandle, shared: State<Shared>, on: bool) {
+    let pref = shared.settings.lock().unwrap().screen.clone();
+    shared.gate.ball.store(on, Ordering::Relaxed);
+    shared.gate.collapsed.store(false, Ordering::Relaxed);
+    relayout(&app, &pref, &shared.gate);
+    // A resize invalidates the click-through flag; the next poll tick decides again.
+    island::refresh_click_through(&app, &shared.gate);
+    shared.gate.set_active(true);
+}
+
+/// The page saw a press on the ball: the poll thread drags the window from here.
+#[tauri::command]
+fn ball_drag_start(app: AppHandle, shared: State<Shared>) {
+    shared.gate.begin_ball_drag(&app);
 }
 
 /// The front end pushes the island shape; Rust decides click-through from it.
@@ -120,8 +150,7 @@ fn focus_window(app: AppHandle, focused: bool) {
 #[tauri::command]
 fn reposition(app: AppHandle, shared: State<Shared>) {
     let pref = shared.settings.lock().unwrap().screen.clone();
-    let collapsed = shared.gate.collapsed.load(Ordering::Relaxed);
-    island::apply_geometry(&app, &pref, collapsed);
+    relayout(&app, &pref, &shared.gate);
 }
 
 #[tauri::command]
@@ -211,6 +240,24 @@ fn hooks_apply(
     Ok(backup)
 }
 
+// ── Antigravity hooks ─────────────────────────────────────────────────────────
+// Same three-step contract as Claude Code's, aimed at ~/.gemini/config/hooks.json.
+
+#[tauri::command]
+fn agy_hooks_status() -> HookStatus {
+    agy::status()
+}
+
+#[tauri::command]
+fn agy_hooks_preview(install: bool) -> Result<HookPreview, String> {
+    agy::preview(install)
+}
+
+#[tauri::command]
+fn agy_hooks_apply(install: bool, fingerprint: String) -> Result<String, String> {
+    agy::write(install, &fingerprint)
+}
+
 #[tauri::command]
 fn approval_decision(app: AppHandle, request_id: String, decision: String) {
     pipe::answer(&app, &request_id, &decision);
@@ -242,12 +289,24 @@ async fn chat_send(
     context: Option<ChatContext>,
 ) -> Result<ChatReply, String> {
     let model = shared.settings.lock().unwrap().model.clone();
-    claude::send(&chat, &model, query, context).await
+    if claude::is_google_model(&model) {
+        google::send(&chat, &model, query, context).await
+    } else {
+        claude::send(&chat, &model, query, context).await
+    }
 }
 
 #[tauri::command]
 fn chat_reset(chat: State<Chat>) {
     chat.reset();
+}
+
+/// Every Gemini chat model the stored key can see, cheapest first. Empty — not
+/// an error — when there is no key yet or the request fails.
+#[tauri::command]
+async fn google_models() -> Vec<google::ModelInfo> {
+    let Some(key) = secrets::get(google::KEY_NAME) else { return Vec::new() };
+    google::fetch_models(&key).await
 }
 
 /// Copies a dropped file into the inbox and reports its name back.
@@ -378,6 +437,8 @@ pub fn run() {
             boot,
             save_settings,
             set_collapsed,
+            set_ball,
+            ball_drag_start,
             set_island_rect,
             focus_window,
             reposition,
@@ -387,12 +448,16 @@ pub fn run() {
             hooks_status,
             hooks_preview,
             hooks_apply,
+            agy_hooks_status,
+            agy_hooks_preview,
+            agy_hooks_apply,
             approval_decision,
             approval_ack,
             approval_decline,
             log_line,
             chat_send,
             chat_reset,
+            google_models,
             ingest_file,
             secret_present,
             secret_set,

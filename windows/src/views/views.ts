@@ -35,6 +35,8 @@ export interface ViewHost {
   focus?(): void;
   /** Called every frame while the view is on screen. */
   tick?(nowMs: number): void;
+  /** True while the view is mid-animation: the frame loop must not sleep until it is done. */
+  busy?(): boolean;
 }
 
 // ── Shared pieces ─────────────────────────────────────────────────────────────
@@ -116,6 +118,13 @@ export function buildHeader(actions: ViewActions): ViewHost {
 
 // ── Overview ──────────────────────────────────────────────────────────────────
 
+/** The grey word after the name in the ticker header. */
+const TOOL_LABELS: Record<AgentTask["source"], string> = {
+  claudeCode: "Claude Code",
+  n8n: "n8n",
+  agent: "Agent",
+};
+
 function buildOverview(actions: ViewActions): ViewHost {
   const ticker = new Ticker();
   const who = h("div", { class: "who" });
@@ -163,6 +172,7 @@ function buildOverview(actions: ViewActions): ViewHost {
     tick(nowMs: number) {
       if (mode === "ticker") ticker.tick(nowMs);
     },
+    busy: () => mode === "ticker" && ticker.animating,
     sync() {
       const task = State.focusTask;
       if (task?.id !== lastFocus) {
@@ -172,10 +182,11 @@ function buildOverview(actions: ViewActions): ViewHost {
         mode = null;
       }
 
-      // VS Code with a live Claude Code session keeps the ticker; every other
-      // pill shows its own card, exactly like IntegrationCardView.
+      // A live Claude Code or agent (Antigravity, Gemini…) session keeps the
+      // ticker; every other pill shows its own card, exactly like IntegrationCardView.
       const sessionActive =
-        task?.id === "integration_claude" && (task.state !== "idle" || task.steps.length > 0);
+        (task?.id === "integration_claude" || task?.source === "agent") &&
+        (task.state !== "idle" || task.steps.length > 0);
 
       if (task && sessionActive) {
         if (mode !== "ticker") {
@@ -188,7 +199,7 @@ function buildOverview(actions: ViewActions): ViewHost {
         who.append(
           dot(task.color, 7),
           h("span", { class: "name", text: task.name }),
-          h("span", { class: "tool", text: task.source === "claudeCode" ? "Claude Code" : "n8n" }),
+          h("span", { class: "tool", text: TOOL_LABELS[task.source] }),
         );
         if (task.steps.length > 1) {
           who.append(h("span", {

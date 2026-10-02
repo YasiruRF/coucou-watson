@@ -22,10 +22,16 @@ const MAX_INLINE_TEXT: u64 = 200_000;
 
 pub const DEFAULT_MODEL: &str = "claude-opus-5";
 
-const SYSTEM_PROMPT: &str = "You are Mochi, a personal AI assistant living at the top of the user's screen. \
+/// Shared with google.rs, so Mochi reads the same whichever provider answers.
+pub(crate) const SYSTEM_PROMPT: &str = "You are Mochi, a personal AI assistant living at the top of the user's screen. \
 You have web search access and can help with absolutely anything — research, coding, finding places, recommendations, tasks, questions. \
 Respond in the user's language. Be thorough and complete — use as much detail as the task requires. \
 No markdown formatting (no **, no ##, no bullet dashes). Use plain text with line breaks.";
+
+/// True for a Gemini model id ("gemini-2.5-flash", …) — how chat_send picks a provider.
+pub fn is_google_model(model: &str) -> bool {
+    model.starts_with("gemini")
+}
 
 #[derive(Default)]
 pub struct Chat {
@@ -38,19 +44,21 @@ impl Chat {
         self.messages.lock().unwrap().clear();
     }
 
-    fn is_empty(&self) -> bool {
+    /// Shared with google.rs: one history, whichever provider is answering —
+    /// switching models mid-conversation keeps the context.
+    pub(crate) fn is_empty(&self) -> bool {
         self.messages.lock().unwrap().is_empty()
     }
 
-    fn push(&self, message: Value) {
+    pub(crate) fn push(&self, message: Value) {
         self.messages.lock().unwrap().push(message);
     }
 
-    fn pop(&self) {
+    pub(crate) fn pop(&self) {
         self.messages.lock().unwrap().pop();
     }
 
-    fn snapshot(&self) -> Vec<Value> {
+    pub(crate) fn snapshot(&self) -> Vec<Value> {
         self.messages.lock().unwrap().clone()
     }
 }

@@ -2,7 +2,8 @@
 // + IslandRootView.botPosition. All values are logical pixels, identical to the
 // macOS app's points.
 
-export type IslandMode = "hidden" | "compact" | "expanded";
+/** `ball`: no session is running, so Mochi floats free as a small draggable ball. */
+export type IslandMode = "hidden" | "compact" | "expanded" | "ball";
 
 export type IslandViewName =
   | "overview"
@@ -59,6 +60,10 @@ export const NOTCH_H = 32;
 export const COMPACT_W = 288; // NOTCH_W + 104
 export const EXPANDED_W = 640;
 
+/** The floating ball, and the window it lives in (src-tauri/src/island.rs BALL_W). */
+export const BALL_SIZE = 88;
+export const BALL_WINDOW = 104;
+
 export const ROUNDED_CORNER = 14; // hidden / compact
 export const EXPANDED_CORNER = 22;
 
@@ -109,6 +114,8 @@ export function islandSize(
       return { w: NOTCH_W, h: 0 };
     case "compact":
       return { w: COMPACT_W, h: NOTCH_H };
+    case "ball":
+      return { w: BALL_SIZE, h: BALL_SIZE };
     case "expanded": {
       const h = view === "prompt" ? chatPromptHeight(chatCount) : VIEW_LAYOUTS[view].height;
       return { w: EXPANDED_W, h };
@@ -135,6 +142,8 @@ export function botPosition(
       return { cx: 46, cy: 16, diameter: 6, opacity: 0 };
     case "compact":
       return { cx: 40, cy: 16, diameter: 20, opacity: 1 };
+    case "ball":
+      return { cx: BALL_SIZE / 2, cy: BALL_SIZE / 2, diameter: 52, opacity: 1 };
     case "expanded": {
       const layout = VIEW_LAYOUTS[view];
       if (view === "uploading") {

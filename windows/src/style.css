@@ -75,6 +75,17 @@ body {
   will-change: width, height, transform;
 }
 
+/* Mochi floating free as a ball while nothing is running: it can be picked up
+   and moved, and flies back to the notch on its own. */
+#island.ball {
+  cursor: grab;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+}
+
+#island.ball:active {
+  cursor: grabbing;
+}
+
 #island-clip {
   position: absolute;
   inset: 0;

@@ -38,6 +38,12 @@ export const Bridge = {
   /** Shrink the window down to the invisible wake strip (hidden) or back to full. */
   setCollapsed: (collapsed: boolean) => call<void>("set_collapsed", { collapsed }),
 
+  /** Shrink the window to the floating ball (true) or give the full panel back (false). */
+  setBall: (on: boolean) => call<void>("set_ball", { on }),
+
+  /** A press landed on the ball: Rust drags the window until the button comes up. */
+  ballDragStart: () => call<void>("ball_drag_start"),
+
   /**
    * Pushes the island shape in window coordinates. Rust flips click-through from
    * its own cursor poll, so the flag is never a frame behind a click.
@@ -80,11 +86,20 @@ export const Bridge = {
   /** "Nobody can act on this" — Claude Code asks in the terminal right away. */
   approvalDecline: (requestId: string) => call<void>("approval_decline", { requestId }),
 
+  // ── Antigravity hooks ──────────────────────────────────────────────────────
+  // Same three-step contract as Claude Code's, aimed at ~/.gemini/config/hooks.json.
+  agyHooksStatus: () => call<HookStatus>("agy_hooks_status"),
+  agyHooksPreview: (install: boolean) => callOrThrow<HookPreview>("agy_hooks_preview", { install }),
+  agyHooksApply: (install: boolean, fingerprint: string) =>
+    callOrThrow<string>("agy_hooks_apply", { install, fingerprint }),
+
   // ── Chat, files, secrets ──────────────────────────────────────────────────
   /** One chat turn. The API key and any file bytes never leave Rust. */
   chatSend: (query: string, context: ChatContext | null) =>
     callOrThrow<{ text: string }>("chat_send", { query, context }),
   chatReset: () => call<void>("chat_reset"),
+  /** Every Gemini chat model the stored Google AI key can see, cheapest first. */
+  googleModels: () => call<ModelInfo[]>("google_models"),
   /** Copies a dropped file into the inbox. */
   ingestFile: (path: string) => callOrThrow<DroppedFile>("ingest_file", { path }),
   /** Only ever tells you whether a key exists — never its value. */
@@ -111,6 +126,11 @@ export interface IntegrationUpdate {
 export type ChatContext =
   | { kind: "file"; name: string; path: string }
   | { kind: "window"; appName: string; title: string; url?: string };
+
+export interface ModelInfo {
+  id: string;
+  label: string;
+}
 
 export interface DroppedFile {
   name: string;
@@ -142,6 +162,10 @@ async function callOrThrow<T>(cmd: string, args?: Record<string, unknown>): Prom
 export type BridgeEvent =
   | { name: "cursor"; payload: { x: number; y: number } }
   | { name: "tray"; payload: string }
+  /** A press landed off the island (the window is click-through there). */
+  | { name: "outside-click"; payload: null }
+  /** The button came up after a press on the ball; `moved` is false for a tap. */
+  | { name: "ball-released"; payload: { moved: boolean } }
   | { name: "hook"; payload: Record<string, unknown> }
   | { name: "screen-changed"; payload: null };
 

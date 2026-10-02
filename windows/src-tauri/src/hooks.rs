@@ -79,7 +79,7 @@ fn read_settings() -> Result<Value, String> {
 
 /// The parsing half of `read_settings`, split out so it can be tested without a
 /// home directory.
-fn parse_settings(bytes: &[u8], path: &str) -> Result<Value, String> {
+pub(crate) fn parse_settings(bytes: &[u8], path: &str) -> Result<Value, String> {
     // PowerShell writes a UTF-8 BOM with `Set-Content -Encoding utf8`, and
     // serde_json refuses it. Stripping it is safe and well defined; guessing at
     // anything else is not.
@@ -103,18 +103,24 @@ fn read_settings_lossy() -> Value {
     read_settings().unwrap_or_else(|_| json!({}))
 }
 
+/// The relay's command line: the exe, then `prefix` (e.g. `--agent antigravity `,
+/// or nothing for Claude Code), then the event name.
 #[cfg(windows)]
-fn hook_command(event: &str) -> String {
+pub(crate) fn command_line(prefix: &str, event: &str) -> String {
     let exe = settings::hook_exe_path().to_string_lossy().replace('\\', "/");
-    format!("\"{exe}\" {event}")
+    format!("\"{exe}\" {prefix}{event}")
 }
 
 /// Claude Code runs the command through `sh`, which still reads `$`, `` ` ``
 /// and `\` inside double quotes. Single quotes keep the path a path, whatever
 /// the home directory is called.
 #[cfg(unix)]
+pub(crate) fn command_line(prefix: &str, event: &str) -> String {
+    format!("{} {prefix}{event}", sh_quote(&settings::hook_exe_path().to_string_lossy()))
+}
+
 fn hook_command(event: &str) -> String {
-    format!("{} {event}", sh_quote(&settings::hook_exe_path().to_string_lossy()))
+    command_line("", event)
 }
 
 /// `s` as one single-quoted shell word: `'` becomes `'\''`, nothing else is
@@ -198,13 +204,13 @@ fn without_ours(existing: &Value) -> Value {
     Value::Object(root)
 }
 
-fn pretty(v: &Value) -> String {
+pub(crate) fn pretty(v: &Value) -> String {
     serde_json::to_string_pretty(v).unwrap_or_default()
 }
 
 /// Down to the second: installing then uninstalling in the same minute must not
 /// quietly overwrite the first backup.
-fn stamp() -> String {
+pub(crate) fn stamp() -> String {
     let t = platform::local_time();
     format!(
         "{:04}{:02}{:02}-{:02}{:02}{:02}",
@@ -219,7 +225,7 @@ fn backup_path() -> PathBuf {
 
 /// Identifies the exact bytes a preview was computed from. FNV-1a is plenty:
 /// the question is only "is this still the file I showed the user?".
-fn fingerprint(bytes: &[u8]) -> String {
+pub(crate) fn fingerprint(bytes: &[u8]) -> String {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
     for b in bytes {
         hash ^= *b as u64;
@@ -292,31 +298,38 @@ pub fn write(install: bool, fingerprint: &str) -> Result<String, String> {
     }
 
     let backup = backup_path();
-    if path.exists() {
-        std::fs::copy(&path, &backup).map_err(|e| format!("backup failed: {e}"))?;
-    }
-
     let next = if install { merged(&current) } else { without_ours(&current) };
     let mut text = pretty(&next);
     text.push('\n');
+    commit(&path, &backup, &text)?;
+    Ok(backup.to_string_lossy().to_string())
+}
+
+/// Backs `path` up to `backup` (when it exists), then replaces it with `text`.
+/// The step both `write` and the Antigravity installer end on, so a backup and
+/// an atomic replace are never something one of them forgot.
+pub(crate) fn commit(path: &Path, backup: &Path, text: &str) -> Result<(), String> {
+    if path.exists() {
+        std::fs::copy(path, backup).map_err(|e| format!("backup failed: {e}"))?;
+    }
 
     // A dotfiles setup often makes settings.json a symlink: write to the file it
     // points at, so the link survives the rename below.
     #[cfg(unix)]
-    let path = std::fs::canonicalize(&path).unwrap_or(path);
+    let path = &std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
 
     // Write beside the target and rename over it: a crash or a full disk leaves
     // the original settings.json intact rather than half a file.
     let temp = path.with_extension(format!("json.coucou-{}", std::process::id()));
-    if let Err(err) = write_like(&temp, &path, text.as_bytes()) {
+    if let Err(err) = write_like(&temp, path, text.as_bytes()) {
         let _ = std::fs::remove_file(&temp);
         return Err(format!("write failed: {err}"));
     }
-    if let Err(err) = std::fs::rename(&temp, &path) {
+    if let Err(err) = std::fs::rename(&temp, path) {
         let _ = std::fs::remove_file(&temp);
         return Err(format!("write failed: {err}"));
     }
-    Ok(backup.to_string_lossy().to_string())
+    Ok(())
 }
 
 /// Writes `bytes` to `temp`, which is about to replace `original`.
@@ -432,7 +445,7 @@ fn install_relay(src: &Path, dest: &Path) {
 // ── Minimal unified diff (LCS) ────────────────────────────────────────────────
 
 /// settings.json is short, so a plain O(n·m) LCS is the simplest honest diff.
-fn unified_diff(before: &str, after: &str) -> String {
+pub(crate) fn unified_diff(before: &str, after: &str) -> String {
     let a: Vec<&str> = before.lines().collect();
     let b: Vec<&str> = after.lines().collect();
     let (n, m) = (a.len(), b.len());

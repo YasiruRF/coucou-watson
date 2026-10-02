@@ -34,9 +34,21 @@ function validateAgent(raw: string | undefined): string | null {
   return raw;
 }
 
+/**
+ * Agents Coucou knows by name (colours from docs/SPEC.md). They get a proper
+ * label, and their pill stays once a session ends — back to idle rather than
+ * removed — so there is always somewhere to look for their work.
+ */
+const KNOWN_AGENTS: Record<string, { label: string; color: string }> = {
+  antigravity: { label: "Antigravity", color: "#E879F9" },
+  gemini: { label: "Gemini CLI", color: "#8AB4F8" },
+};
+
 const FALLBACK_COLORS = ["#22C55E", "#EAB308", "#60A5FA", "#E879F9"];
 
 function agentColor(name: string): string {
+  const known = KNOWN_AGENTS[name];
+  if (known) return known.color;
   let h = 0;
   for (let i = 0; i < name.length; i++) {
     h = (Math.imul(31, h) + name.charCodeAt(i)) | 0;
@@ -132,7 +144,19 @@ function clearSession() {
   if (!t) return;
   t.steps = [];
   t.stepIndex = 0;
+  t.stepCount = 0;
   t.name = "VS Code";
+  t.pillBadge = null;
+}
+
+/** A known agent's session is over: its pill stays, empty and idle. */
+function clearAgent(id: string) {
+  const t = State.tasks.find((x) => x.id === id);
+  if (!t) return;
+  t.state = "idle";
+  t.steps = [];
+  t.stepIndex = 0;
+  t.stepCount = 0;
   t.pillBadge = null;
 }
 
@@ -168,15 +192,18 @@ function handleHook(island: Island, payload: HookPayload) {
       if (isAlert) island.setView(view);
     } else if (isAlert) {
       island.alert(view);
-    } else if (State.mode === "hidden") {
+    } else if (State.mode === "hidden" || State.mode === "ball") {
+      // Work is starting: the ball has nothing left to float around for.
       island.reveal();
     }
   };
 
+  const known = validAgent ? KNOWN_AGENTS[validAgent] : undefined;
+
   /** Ensure the agent pill exists (no-op for Claude Code). */
   const ensurePill = () => {
     if (isExternalAgent) {
-      State.upsertExternalAgent(agentId, validAgent!, agentColor(validAgent!));
+      State.upsertExternalAgent(agentId, known?.label ?? validAgent!, agentColor(validAgent!));
     } else {
       upsert(projectName, cwd);
     }
@@ -237,7 +264,9 @@ function handleHook(island: Island, payload: HookPayload) {
       if (focused) surface("finished", true);
       else State.setPillBadge(agentId, "finished");
       window.setTimeout(() => {
-        if (isExternalAgent) {
+        // A new prompt may have started in these five seconds: leave it alone.
+        if (State.tasks.find((t) => t.id === agentId)?.state !== "finished") return;
+        if (isExternalAgent && !known) {
           State.removeTask(agentId);
         } else {
           State.updateTask(agentId, "idle");
@@ -254,7 +283,9 @@ function handleHook(island: Island, payload: HookPayload) {
       break;
 
     case "SessionEnd":
-      if (isExternalAgent) {
+      if (known) {
+        clearAgent(agentId);
+      } else if (isExternalAgent) {
         State.removeTask(agentId);
       } else {
         State.updateTask(agentId, "idle");

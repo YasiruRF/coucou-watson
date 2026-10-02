@@ -120,13 +120,17 @@ fn read_event() -> Option<(String, String)> {
     if !agent.is_empty() {
         map.insert("coucou_agent".into(), serde_json::Value::String(agent));
     }
-    let event = map
+    let raw_event = map
         .get("hook_event_name")
         .and_then(|v| v.as_str())
         .map(str::to_string)
         .filter(|s| !s.is_empty())
         .unwrap_or(arg_event);
+    // Gemini CLI and Antigravity name their events and tool fields their own way.
+    // Claude Code's names are not in the table, so they pass through untouched.
+    let event = normalize_event(&raw_event).to_string();
     map.insert("hook_event_name".into(), serde_json::Value::String(event.clone()));
+    normalize_tool_fields(map);
 
     for field in DROPPED_FIELDS {
         map.remove(*field);
@@ -138,7 +142,17 @@ fn read_event() -> Option<(String, String)> {
         .map(str::is_empty)
         .unwrap_or(true);
     if cwd_missing {
-        if let Ok(cwd) = std::env::current_dir() {
+        // Antigravity reports its open folders instead of a cwd.
+        let workspace = map
+            .get("workspacePaths")
+            .and_then(|v| v.as_array())
+            .and_then(|a| a.first())
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
+        if let Some(path) = workspace {
+            map.insert("cwd".into(), serde_json::Value::String(path));
+        } else if let Ok(cwd) = std::env::current_dir() {
             map.insert(
                 "cwd".into(),
                 serde_json::Value::String(cwd.to_string_lossy().to_string()),
@@ -166,6 +180,65 @@ fn read_event() -> Option<(String, String)> {
     let mut line = payload.to_string();
     line.push('\n');
     Some((line, event))
+}
+
+/// Gemini CLI and Antigravity (agy) event names → the names the island speaks.
+/// Same table as the macOS relay (HookServer.swift, `normalize_event`).
+fn normalize_event(name: &str) -> &str {
+    match name {
+        "BeforeTool" | "BeforeToolSelection" => "PreToolUse",
+        "AfterTool" | "AfterModel" => "PostToolUse",
+        "BeforeAgent" | "PreInvocation" => "UserPromptSubmit",
+        "AfterAgent" => "Stop",
+        "PostInvocation" => "PostToolUse",
+        "startup" => "SessionStart",
+        "exit" => "SessionEnd",
+        other => other,
+    }
+}
+
+/// Antigravity carries the tool as `toolCall.{name,args}` with its own argument
+/// names, and the conversation as `conversationId`. The island reads
+/// `tool_name`, `tool_input` and `session_id`, as Claude Code sends them.
+/// Does nothing when `tool_name` is already there, i.e. for Claude Code.
+fn normalize_tool_fields(map: &mut serde_json::Map<String, serde_json::Value>) {
+    use serde_json::Value;
+    if map.contains_key("tool_name") {
+        return;
+    }
+    let text = |v: Option<&Value>| v.and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string);
+    let tool = map.get("toolCall").and_then(Value::as_object).cloned().unwrap_or_default();
+
+    if let Some(name) = text(tool.get("name")).or_else(|| text(map.get("tool"))) {
+        map.insert("tool_name".into(), Value::String(name));
+    }
+    if !map.contains_key("tool_input") {
+        if let Some(args) = tool.get("args").and_then(Value::as_object) {
+            let mut flat = args.clone();
+            for (from, to) in [
+                ("CommandLine", "command"),
+                ("FilePath", "file_path"),
+                ("Path", "path"),
+                ("Url", "url"),
+                ("Query", "query"),
+                ("Pattern", "pattern"),
+            ] {
+                if let Some(v) = flat.get(from).cloned() {
+                    flat.insert(to.into(), v);
+                }
+            }
+            map.insert("tool_input".into(), Value::Object(flat));
+        }
+    }
+    if !map.contains_key("session_id") {
+        let id = ["conversationId", "conversation_id", "sessionId", "GEMINI_SESSION_ID"]
+            .iter()
+            .find_map(|k| text(map.get(*k)))
+            .or_else(|| std::env::var("GEMINI_SESSION_ID").ok().filter(|s| !s.is_empty()));
+        if let Some(id) = id {
+            map.insert("session_id".into(), Value::String(id));
+        }
+    }
 }
 
 /// Caps every string in the payload. A single Write can carry a whole file.
@@ -243,6 +316,42 @@ mod tests {
         assert!(decision_json("maybe").is_none());
         // The shape the app used to send must not be mistaken for a decision.
         assert!(decision_json(r#"{"permissionDecision":"allow"}"#).is_none());
+    }
+
+    #[test]
+    fn antigravity_and_gemini_events_get_the_islands_names() {
+        assert_eq!(normalize_event("PreInvocation"), "UserPromptSubmit");
+        assert_eq!(normalize_event("PostInvocation"), "PostToolUse");
+        assert_eq!(normalize_event("BeforeTool"), "PreToolUse");
+        assert_eq!(normalize_event("AfterAgent"), "Stop");
+        // Claude Code's own names must never be touched.
+        for own in ["PreToolUse", "PermissionRequest", "SessionStart", "Stop", "SubagentStop"] {
+            assert_eq!(normalize_event(own), own);
+        }
+    }
+
+    #[test]
+    fn an_antigravity_tool_call_becomes_a_claude_shaped_one() {
+        let mut v = serde_json::json!({
+            "toolCall": { "name": "run_command", "args": { "CommandLine": "npm test", "Cwd": "D:\\x" } },
+            "conversationId": "c-1"
+        });
+        normalize_tool_fields(v.as_object_mut().unwrap());
+        assert_eq!(v["tool_name"], "run_command");
+        assert_eq!(v["tool_input"]["command"], "npm test");
+        // The original argument stays too; only aliases are added.
+        assert_eq!(v["tool_input"]["CommandLine"], "npm test");
+        assert_eq!(v["session_id"], "c-1");
+    }
+
+    #[test]
+    fn a_claude_code_payload_is_left_exactly_as_it_was() {
+        let original = serde_json::json!({
+            "tool_name": "Bash", "tool_input": { "command": "ls" }, "session_id": "s", "conversationId": "other"
+        });
+        let mut v = original.clone();
+        normalize_tool_fields(v.as_object_mut().unwrap());
+        assert_eq!(v, original);
     }
 
     #[test]

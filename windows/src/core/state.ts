@@ -13,6 +13,8 @@ export interface AgentTask {
   state: BotStateName;
   stepIndex: number;
   steps: string[];
+  /** Steps ever appended. `steps` keeps only the last 20, so this is what tells the ticker one arrived. */
+  stepCount?: number;
   source: AgentSource;
   isIntegration: boolean;
   emote?: BotEmoteName | null;
@@ -168,6 +170,15 @@ class AppState {
     return this.tasks.filter((t) => t.id !== this.focusId);
   }
 
+  /** True while any coding agent (Claude Code or an agent_* pill) is mid-session. */
+  get hasActiveSession(): boolean {
+    return this.tasks.some(
+      (t) =>
+        (t.id === "integration_claude" || t.source === "agent") &&
+        t.state !== "idle" && t.state !== "sleeping" && t.state !== "finished" && t.state !== "dizzy",
+    );
+  }
+
   setFocus(id: string) {
     const t = this.tasks.find((x) => x.id === id);
     if (!t) return;
@@ -186,6 +197,7 @@ class AppState {
   appendStep(id: string, step: string) {
     const t = this.tasks.find((x) => x.id === id);
     if (!t) return;
+    t.stepCount = (t.stepCount ?? t.steps.length) + 1;
     t.steps.push(step);
     if (t.steps.length > 20) t.steps.shift();
     t.stepIndex = t.steps.length - 1;
