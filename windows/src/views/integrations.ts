@@ -216,6 +216,40 @@ function githubCard(): HTMLElement {
   const stars = Number(d.totalStars ?? 0);
   const repos = Number(d.totalRepos ?? 0);
   const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
+
+  const ci = d.ci as Record<string, unknown> | null | undefined;
+  const rows = h("div", { class: "int-rows tight" });
+  if (ci) {
+    const conclusion = ci.conclusion as string | null;
+    const status = ci.status as string;
+    const done = status === "completed";
+    const ok = done && conclusion === "success";
+    const accent = !done ? "#EAB308" : ok ? "#22C55E" : "#F4505E";
+    const label = !done ? "Running…" : ok ? "Passing" : conclusion ?? "Failed";
+    rows.append(
+      h(
+        "button",
+        { class: "int-page", onclick: () => void Bridge.openUrl(String(ci.url ?? "")) },
+        h("i", { class: "int-emoji", style: `color:${accent}` }, svg(ICONS.checkCircle, 11)),
+        h("span", { class: "int-name", text: String(ci.repo ?? "") }),
+        h("span", { class: "int-ago", style: `color:${accent}`, text: label }),
+      ),
+    );
+  }
+
+  const prs = arr("integration_github", "pullRequests");
+  for (const pr of prs.slice(0, 3)) {
+    rows.append(
+      h(
+        "button",
+        { class: "int-page", onclick: () => void Bridge.openUrl(String(pr.url ?? "")) },
+        h("i", { class: "int-emoji" }, svg(ICONS.pullRequest, 10)),
+        h("span", { class: "int-name", text: String(pr.title ?? "") }),
+        h("span", { class: "int-ago", text: String(pr.repo ?? "") }),
+      ),
+    );
+  }
+
   return h(
     "div",
     { class: "int-card" },
@@ -225,6 +259,71 @@ function githubCard(): HTMLElement {
       { class: "int-stats" },
       statRow(ICONS.star, "#F5A524", "Total stars", fmt(stars)),
       statRow(ICONS.stack, "#6B7079", "Repositories", String(repos)),
+    ),
+    rows,
+  );
+}
+
+// ── System vitals ────────────────────────────────────────────────────────────
+
+function meterRow(icon: string, color: string, label: string, pct: number, detail: string): HTMLElement {
+  return h(
+    "div",
+    { class: "int-stat" },
+    h("i", { class: "int-stat-icon", style: `color:${color}` }, svg(icon, 10)),
+    h("span", { class: "int-stat-label", text: label }),
+    h("div", { class: "int-meter" }, h("i", { style: `width:${clampPct(pct)}%;background:${color}` })),
+    h("span", { class: "int-stat-value", text: detail }),
+  );
+}
+
+function clampPct(n: number): number {
+  return Math.max(0, Math.min(100, n));
+}
+
+function vitalsCard(): HTMLElement {
+  const d = get("integration_vitals");
+  const cpu = Number(d.cpuPercent ?? 0);
+  const ramUsed = Number(d.ramUsedGb ?? 0);
+  const ramTotal = Number(d.ramTotalGb ?? 1);
+  const battery = d.batteryPercent as number | null;
+  const charging = d.batteryCharging as boolean | null;
+
+  const rows: HTMLElement[] = [
+    meterRow(ICONS.cpu, "#38BDF8", "CPU", cpu, `${cpu.toFixed(0)}%`),
+    meterRow(
+      ICONS.stack, "#A78BFA", "Memory", (ramUsed / Math.max(ramTotal, 0.01)) * 100,
+      `${ramUsed.toFixed(1)} / ${ramTotal.toFixed(0)} GB`,
+    ),
+  ];
+  if (battery != null) {
+    const color = charging ? "#22C55E" : battery < 20 ? "#F4505E" : "#38BDF8";
+    rows.push(meterRow(ICONS.battery, color, "Battery", battery, `${battery.toFixed(0)}%${charging ? " ⚡" : ""}`));
+  }
+
+  return h("div", { class: "int-card" }, header("#38BDF8", "System", "Vitals"), h("div", { class: "int-stats" }, ...rows));
+}
+
+// ── Now playing ───────────────────────────────────────────────────────────────
+
+function nowplayingCard(): HTMLElement {
+  const d = get("integration_nowplaying");
+  const title = String(d.title ?? "");
+  const artist = String(d.artist ?? "");
+  const app = String(d.app ?? "");
+  const playing = Boolean(d.playing);
+  return h(
+    "div",
+    { class: "int-card" },
+    header("#1DB954", "Now Playing", app || "Media"),
+    h(
+      "div",
+      { class: "int-row first", style: "background:#1db95414" },
+      dot(playing ? "#1DB954" : "#6B7079", 5),
+      h("div", { style: "display:flex;flex-direction:column;gap:2px;min-width:0" },
+        h("span", { class: "int-name", text: title }),
+        h("span", { class: "int-ago", text: artist }),
+      ),
     ),
   );
 }
@@ -398,6 +497,10 @@ export function hasIntegrationData(id: string): boolean {
       return arr(id, "pages").length > 0;
     case "integration_calcom":
       return info.loaded;
+    case "integration_vitals":
+      return info.loaded;
+    case "integration_nowplaying":
+      return info.loaded && typeof get(id).title === "string" && (get(id).title as string).length > 0;
     default:
       return false;
   }
@@ -426,6 +529,10 @@ export function renderIntegrationCard(task: AgentTask, hooks: IntegrationCardHoo
       return notionCard();
     case "integration_calcom":
       return calcomCard();
+    case "integration_vitals":
+      return vitalsCard();
+    case "integration_nowplaying":
+      return nowplayingCard();
     default:
       return idleCard(task, hooks.openSettings);
   }

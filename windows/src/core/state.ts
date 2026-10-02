@@ -58,7 +58,8 @@ const task = (
   id, name, color, state: "idle", stepIndex: 0, steps: [], source, isIntegration: true,
 });
 
-/** AgentTask.integrationAgents — same ids, names and colours as macOS. */
+/** AgentTask.integrationAgents — same ids, names and colours as macOS, plus
+ *  two Windows-only, key-less pills (system vitals, now playing). */
 export const INTEGRATION_AGENTS: AgentTask[] = [
   task("integration_claude", "VS Code", "#F5F6F8", "claudeCode"),
   task("integration_resend", "Resend", "#22C55E", "n8n"),
@@ -68,12 +69,18 @@ export const INTEGRATION_AGENTS: AgentTask[] = [
   task("integration_notion", "Notion", "#8C8C8C", "n8n"),
   task("integration_calcom", "Cal.com", "#C9956A", "n8n"),
   task("integration_stripe", "Stripe", "#0570DE", "n8n"),
+  task("integration_vitals", "System", "#38BDF8", "n8n"),
+  task("integration_nowplaying", "Now Playing", "#1DB954", "n8n"),
 ];
 
 export const TOGGLEABLE_INTEGRATION_IDS = [
   "integration_resend", "integration_n8n", "integration_vercel", "integration_github",
   "integration_notion", "integration_calcom", "integration_stripe",
+  "integration_vitals", "integration_nowplaying",
 ];
+
+/** These two need no Credential Manager key — they're always "configured". */
+export const KEYLESS_INTEGRATION_IDS = ["integration_vitals", "integration_nowplaying"];
 
 /** What an integration poller last reported. */
 export interface IntegrationInfo {

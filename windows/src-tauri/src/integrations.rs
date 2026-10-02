@@ -68,7 +68,10 @@ pub fn start(app: AppHandle) {
     spawn(app.clone(), "integration_resend", 6, 60, poll_resend);
     spawn(app.clone(), "integration_github", 7, 300, poll_github);
     spawn(app.clone(), "integration_calcom", 8, 300, poll_calcom);
-    spawn(app, "integration_notion", 9, 300, poll_notion);
+    spawn(app.clone(), "integration_notion", 9, 300, poll_notion);
+    // Local, key-less: no network call, so a short interval costs nothing.
+    spawn(app.clone(), "integration_vitals", 1, 5, poll_vitals);
+    spawn(app, "integration_nowplaying", 2, 3, poll_nowplaying);
 }
 
 /// True when the user has this integration switched on in settings.
@@ -113,6 +116,8 @@ pub async fn poll_once(app: AppHandle, id: &str) {
         "integration_resend" => poll_resend(app).await,
         "integration_notion" => poll_notion(app).await,
         "integration_calcom" => poll_calcom(app).await,
+        "integration_vitals" => poll_vitals(app).await,
+        "integration_nowplaying" => poll_nowplaying(app).await,
         _ => {}
     }
 }
@@ -292,6 +297,7 @@ async fn poll_github(app: AppHandle) {
         .or_else(|| json.get("total_private_repos"))
         .and_then(Value::as_i64)
         .unwrap_or(0);
+    let login = json.get("login").and_then(Value::as_str).unwrap_or("").to_string();
 
     let repos = http
         .get("https://api.github.com/user/repos?per_page=100&affiliation=owner&sort=pushed")
@@ -300,27 +306,102 @@ async fn poll_github(app: AppHandle) {
         .header("User-Agent", "Coucou")
         .send()
         .await;
-    let stars: i64 = match repos {
-        Ok(r) if r.status().is_success() => r
-            .json::<Value>()
-            .await
-            .ok()
-            .and_then(|v| v.as_array().cloned())
-            .map(|list| {
-                list.iter()
-                    .filter_map(|r| r.get("stargazers_count").and_then(Value::as_i64))
-                    .sum()
-            })
-            .unwrap_or(0),
-        _ => 0,
-    };
+    let mut stars: i64 = 0;
+    let mut most_recent_repo: Option<String> = None;
+    if let Ok(r) = repos {
+        if r.status().is_success() {
+            if let Some(list) = r.json::<Value>().await.ok().and_then(|v| v.as_array().cloned()) {
+                stars = list.iter().filter_map(|r| r.get("stargazers_count").and_then(Value::as_i64)).sum();
+                most_recent_repo = list
+                    .first()
+                    .and_then(|r| r.get("full_name"))
+                    .and_then(Value::as_str)
+                    .map(str::to_string);
+            }
+        }
+    }
+
+    // PRs waiting on your review — the thing that actually needs a human.
+    let mut pull_requests: Vec<Value> = Vec::new();
+    if !login.is_empty() {
+        let search = http
+            .get("https://api.github.com/search/issues")
+            .query(&[("q", format!("is:pr is:open review-requested:{login}").as_str())])
+            .header("Authorization", format!("Bearer {token}"))
+            .header("Accept", "application/vnd.github+json")
+            .header("User-Agent", "Coucou")
+            .send()
+            .await;
+        if let Ok(r) = search {
+            if r.status().is_success() {
+                if let Ok(j) = r.json::<Value>().await {
+                    pull_requests = j
+                        .get("items")
+                        .and_then(Value::as_array)
+                        .map(|items| items.iter().take(5).filter_map(parse_pull_request).collect())
+                        .unwrap_or_default();
+                }
+            }
+        }
+    }
+
+    // CI status for whichever repo was pushed to most recently.
+    let mut ci = json!(null);
+    let mut event = None;
+    if let Some(repo) = &most_recent_repo {
+        let runs = http
+            .get(format!("https://api.github.com/repos/{repo}/actions/runs?per_page=1"))
+            .header("Authorization", format!("Bearer {token}"))
+            .header("Accept", "application/vnd.github+json")
+            .header("User-Agent", "Coucou")
+            .send()
+            .await;
+        if let Ok(r) = runs {
+            if r.status().is_success() {
+                if let Ok(j) = r.json::<Value>().await {
+                    if let Some(run) = j.get("workflow_runs").and_then(Value::as_array).and_then(|a| a.first()) {
+                        let status = run.get("status").and_then(Value::as_str).unwrap_or("").to_string();
+                        let conclusion = run.get("conclusion").and_then(Value::as_str).map(str::to_string);
+                        let run_id = run.get("id").and_then(Value::as_i64).unwrap_or(0);
+                        let html_url = run.get("html_url").and_then(Value::as_str).unwrap_or("");
+                        ci = json!({ "repo": repo, "status": status, "conclusion": conclusion, "url": html_url });
+
+                        if status == "completed" && is_new("github_run", &run_id.to_string()) {
+                            let success = conclusion.as_deref() == Some("success");
+                            event = Some(IntegrationEvent { success, label: repo.clone(), detail: conclusion });
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     emit(&app, IntegrationUpdate {
         id: "integration_github",
-        data: json!({ "totalRepos": public + private, "totalStars": stars }),
+        data: json!({
+            "totalRepos": public + private,
+            "totalStars": stars,
+            "pullRequests": pull_requests,
+            "ci": ci,
+        }),
         error: None,
-        event: None,
+        event,
     });
+}
+
+fn parse_pull_request(item: &Value) -> Option<Value> {
+    // repository_url is ".../repos/{owner}/{repo}" — the last two segments.
+    let repo = item.get("repository_url").and_then(Value::as_str).map(|u| {
+        let parts: Vec<&str> = u.rsplit('/').take(2).collect();
+        format!("{}/{}", parts.get(1).unwrap_or(&""), parts.first().unwrap_or(&""))
+    });
+    Some(json!({
+        "id": item.get("id")?.as_i64()?,
+        "title": item.get("title")?.as_str()?,
+        "url": item.get("html_url")?.as_str()?,
+        "repo": repo.unwrap_or_default(),
+        "createdAt": item.get("created_at").and_then(Value::as_str).unwrap_or(""),
+    }))
 }
 
 // ── Vercel ────────────────────────────────────────────────────────────────────
@@ -762,4 +843,146 @@ fn fmt_value(v: &Value) -> String {
         Value::Object(_) => "{…}".into(),
         other => other.to_string(),
     }
+}
+
+// ── System vitals (local, no key) ──────────────────────────────────────────────
+
+static SYSTEM: std::sync::LazyLock<Mutex<sysinfo::System>> =
+    std::sync::LazyLock::new(|| Mutex::new(sysinfo::System::new_all()));
+
+async fn poll_vitals(app: AppHandle) {
+    let (cpu_percent, ram_used_gb, ram_total_gb) = {
+        let mut sys = SYSTEM.lock().unwrap();
+        sys.refresh_cpu_usage();
+        sys.refresh_memory();
+        let bytes_to_gb = |b: u64| b as f64 / 1_073_741_824.0;
+        (sys.global_cpu_usage() as f64, bytes_to_gb(sys.used_memory()), bytes_to_gb(sys.total_memory()))
+    };
+    let (battery_percent, battery_charging) = match battery_status() {
+        Some((p, c)) => (Some(p), Some(c)),
+        None => (None, None),
+    };
+    emit(&app, IntegrationUpdate {
+        id: "integration_vitals",
+        data: json!({
+            "cpuPercent": cpu_percent,
+            "ramUsedGb": ram_used_gb,
+            "ramTotalGb": ram_total_gb,
+            "batteryPercent": battery_percent,
+            "batteryCharging": battery_charging,
+        }),
+        error: None,
+        event: None,
+    });
+}
+
+/// Battery percentage and AC status, or `None` on a desktop with no battery.
+#[cfg(windows)]
+fn battery_status() -> Option<(f64, bool)> {
+    use windows::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
+    let mut status = SYSTEM_POWER_STATUS::default();
+    unsafe {
+        GetSystemPowerStatus(&mut status).ok()?;
+    }
+    // 255 = "unknown" — the documented value for "no battery present".
+    if status.BatteryLifePercent == 255 {
+        return None;
+    }
+    Some((status.BatteryLifePercent as f64, status.ACLineStatus == 1))
+}
+
+#[cfg(target_os = "linux")]
+fn battery_status() -> Option<(f64, bool)> {
+    let capacity = std::fs::read_to_string("/sys/class/power_supply/BAT0/capacity").ok()?;
+    let percent: f64 = capacity.trim().parse().ok()?;
+    let status = std::fs::read_to_string("/sys/class/power_supply/BAT0/status").unwrap_or_default();
+    Some((percent, status.trim().eq_ignore_ascii_case("Charging")))
+}
+
+// ── Now playing (local, no key) ─────────────────────────────────────────────────
+
+/// What's on screen. On Linux this is always `None` — the MPRIS route is left
+/// for later, same as the Mac-only features windows/README.md already lists.
+#[cfg(windows)]
+async fn poll_nowplaying(app: AppHandle) {
+    let snapshot = tokio::task::spawn_blocking(nowplaying_snapshot).await.unwrap_or(None);
+    let data = match snapshot {
+        Some(info) => json!({
+            "title": info.title,
+            "artist": info.artist,
+            "app": info.app,
+            "playing": info.playing,
+        }),
+        None => json!({}),
+    };
+    emit(&app, IntegrationUpdate { id: "integration_nowplaying", data, error: None, event: None });
+}
+
+#[cfg(target_os = "linux")]
+async fn poll_nowplaying(app: AppHandle) {
+    emit(&app, IntegrationUpdate {
+        id: "integration_nowplaying",
+        data: json!({}),
+        error: None,
+        event: None,
+    });
+}
+
+#[cfg(windows)]
+struct NowPlaying {
+    title: String,
+    artist: String,
+    app: String,
+    playing: bool,
+}
+
+/// Blocking: every call here is a WinRT `.get()` wait, so this only ever runs
+/// inside `spawn_blocking`, never directly on the async runtime.
+#[cfg(windows)]
+fn nowplaying_snapshot() -> Option<NowPlaying> {
+    use windows::Media::Control::{
+        GlobalSystemMediaTransportControlsSessionManager as Manager,
+        GlobalSystemMediaTransportControlsSessionPlaybackStatus as PlaybackStatus,
+    };
+    let manager = Manager::RequestAsync().ok()?.get().ok()?;
+    let session = manager.GetCurrentSession().ok()?;
+    let props = session.TryGetMediaPropertiesAsync().ok()?.get().ok()?;
+    let title = props.Title().ok()?.to_string();
+    if title.is_empty() {
+        return None;
+    }
+    let artist = props.Artist().map(|s| s.to_string()).unwrap_or_default();
+    let aumid = session.SourceAppUserModelId().map(|s| s.to_string()).unwrap_or_default();
+    let playing = session
+        .GetPlaybackInfo()
+        .and_then(|p| p.PlaybackStatus())
+        .map(|s| s == PlaybackStatus::Playing)
+        .unwrap_or(false);
+    Some(NowPlaying { title, artist, app: friendly_app_name(&aumid), playing })
+}
+
+/// The AUMID is an app identifier, not a name fit to show — map the ones
+/// people actually use to a readable label, and fall back to whatever comes
+/// before the first `!` for anything else.
+#[cfg(windows)]
+fn friendly_app_name(aumid: &str) -> String {
+    let lower = aumid.to_lowercase();
+    let known = [
+        ("spotify", "Spotify"),
+        ("chrome", "Chrome"),
+        ("msedge", "Edge"),
+        ("firefox", "Firefox"),
+        ("zunemusic", "Media Player"),
+        ("groove", "Media Player"),
+        ("wmplayer", "Windows Media Player"),
+        ("vlc", "VLC"),
+        ("applemusic", "Apple Music"),
+        ("itunes", "iTunes"),
+    ];
+    for (needle, name) in known {
+        if lower.contains(needle) {
+            return name.to_string();
+        }
+    }
+    aumid.split('!').next().unwrap_or(aumid).to_string()
 }

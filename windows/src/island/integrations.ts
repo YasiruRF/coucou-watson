@@ -4,7 +4,7 @@
 
 import { onEvent, Bridge, type IntegrationUpdate } from "../core/bridge";
 import { Sound } from "../core/sound";
-import { State } from "../core/state";
+import { KEYLESS_INTEGRATION_IDS, State } from "../core/state";
 import type { Island } from "./island";
 
 /** Which Credential Manager key backs each pill. */
@@ -37,6 +37,11 @@ export async function refreshConfigured() {
     data: {}, error: null, loaded: false, configured: false,
   };
   State.integrations.integration_claude = { ...claude, configured: hooks };
+  // System vitals and now-playing read local OS state, not a stored key.
+  for (const id of KEYLESS_INTEGRATION_IDS) {
+    const info = State.integrations[id] ?? { data: {}, error: null, loaded: false, configured: false };
+    State.integrations[id] = { ...info, configured: true };
+  }
   State.notify();
 }
 

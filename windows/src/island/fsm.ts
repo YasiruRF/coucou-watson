@@ -123,13 +123,6 @@ export class IslandStateMachine {
     this.transition("petit");
   }
 
-  /** Nothing is running: the notch lets Mochi float out as a ball. */
-  ballify() {
-    if (this.state === "ball" || this.state === "coucou") return;
-    this.cancelTimers();
-    this.transition("ball");
-  }
-
   /** The ball was touched: keep it as a ball. */
   ballTouched(_pointerOver: boolean) {
     if (this.state !== "ball") return;
@@ -148,7 +141,14 @@ export class IslandStateMachine {
     this.petitHide = window.setTimeout(() => {
       this.petitHide = null;
       if (this.state !== "petit") return;
-      // Inactive in notch -> float out as a ball instead of disappearing!
+      // A session is actively working: stay put in the notch so there's
+      // somewhere to look, and check again later rather than dropping the
+      // timer — once it finishes, this is what notices and floats the ball.
+      if (!this.isIdle()) {
+        this.schedulePetitHide();
+        return;
+      }
+      // Nothing running -> float out as a ball instead of disappearing.
       this.transition("ball");
     }, this.petitToHiddenDelay * 1000);
   }

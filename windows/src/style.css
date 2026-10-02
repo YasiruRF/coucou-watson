@@ -1233,6 +1233,22 @@ input[type="range"]::-webkit-slider-thumb {
   font-variant-numeric: tabular-nums;
 }
 
+.int-meter {
+  flex: 1 1 auto;
+  height: 4px;
+  min-width: 36px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.int-meter i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+
 .int-balance {
   display: flex;
   align-items: baseline;
