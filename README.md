@@ -23,6 +23,8 @@ Approve permissions, watch your agents work, drop a file, chat with Claude — a
 
 ---
 
+> **This is an unofficial, non-commercial fork** of [Coucou](https://github.com/Louis-CFM/coucou) by Louis Raillé, built for personal use and feedback — not affiliated with or endorsed by the original author. The character is being renamed from "Mochi" to "Wato"; its design, icon and sounds are still the original project's for now (see [LICENSE-ASSETS.md](LICENSE-ASSETS.md)).
+
 ## Why
 
 Some studios showed off gorgeous notch companions… and never let anyone use them.

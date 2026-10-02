@@ -19,6 +19,8 @@ Approve Claude Code permissions, watch your session work, drop a file, chat with
 
 ---
 
+> **This is an unofficial, non-commercial fork** of [Coucou](https://github.com/Louis-CFM/coucou) by Louis Raillé — not affiliated with or endorsed by the original author. See the [root README](../README.md#license) and [LICENSE-ASSETS.md](../LICENSE-ASSETS.md) for what that means for this build.
+
 ## Install
 
 The downloadable installer is **temporarily unavailable**. Microsoft Defender
