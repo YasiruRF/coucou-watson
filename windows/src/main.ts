@@ -56,7 +56,7 @@ async function main() {
   // Rust sees every press, even the ones the click-through window never receives.
   await onEvent<null>("outside-click", () => island.onOutsideClick());
   await onEvent<{ moved: boolean }>("ball-released", ({ moved }) => island.onBallReleased(moved));
-  await onEvent<null>("keystroke", () => island.onKeystroke());
+  await onEvent<{ enter: boolean }>("keystroke", ({ enter }) => island.onKeystroke(enter));
 
   // The settings window writes preferences; apply them here without a restart.
   await onEvent<Settings>("settings-changed", (s) => {
@@ -80,7 +80,7 @@ async function main() {
   // page wake the island so the visuals can be checked with `npm run dev`.
   if (!IS_TAURI) {
     document.addEventListener("click", () => Sound.resume(), { once: true });
-    document.addEventListener("keydown", () => island.onKeystroke());
+    document.addEventListener("keydown", (e) => island.onKeystroke(e.key === "Enter"));
   }
 }
 

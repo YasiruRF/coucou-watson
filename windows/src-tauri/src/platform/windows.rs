@@ -4,6 +4,7 @@ use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
 use std::process::Command;
 
+use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
 
 use ::windows::core::{BOOL, PWSTR};
@@ -15,13 +16,13 @@ use ::windows::Win32::Security::{GetTokenInformation, TokenUser, TOKEN_QUERY, TO
 use ::windows::Win32::System::Ole::RevokeDragDrop;
 use ::windows::Win32::System::SystemInformation::GetLocalTime;
 use ::windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
-use ::windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON};
+use ::windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON, VK_RETURN};
 use ::windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, DispatchMessageW, EnumChildWindows, GetClassNameW, GetCursorPos, GetMessageW,
-    GetWindowLongPtrW, SetWindowLongPtrW, SetWindowPos, SetWindowsHookExW, TranslateMessage,
-    UnhookWindowsHookEx, GWL_EXSTYLE, HWND_TOPMOST, MSG, SWP_FRAMECHANGED, SWP_NOACTIVATE,
-    SWP_NOMOVE, SWP_NOSIZE, WH_KEYBOARD_LL, WM_KEYDOWN, WM_SYSKEYDOWN, WS_EX_NOACTIVATE,
-    WS_EX_TOOLWINDOW,
+    GetWindowLongPtrW, KBDLLHOOKSTRUCT, SetWindowLongPtrW, SetWindowPos, SetWindowsHookExW,
+    TranslateMessage, UnhookWindowsHookEx, GWL_EXSTYLE, HWND_TOPMOST, MSG, SWP_FRAMECHANGED,
+    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, WH_KEYBOARD_LL, WM_KEYDOWN, WM_SYSKEYDOWN,
+    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
 };
 
 use super::LocalTime;
@@ -261,6 +262,13 @@ pub fn set_input_region(_win: &WebviewWindow, _rect: Option<(f64, f64, f64, f64)
 
 static APP: std::sync::OnceLock<AppHandle> = std::sync::OnceLock::new();
 
+/// Carries only whether the key was Enter — the one identity this hook ever
+/// inspects. Every other key arrives indistinguishable from the others.
+#[derive(Serialize, Clone)]
+struct KeystrokePayload {
+    enter: bool,
+}
+
 unsafe extern "system" fn low_level_keyboard_proc(
     code: i32,
     wparam: WPARAM,
@@ -268,14 +276,17 @@ unsafe extern "system" fn low_level_keyboard_proc(
 ) -> LRESULT {
     if code >= 0 && (wparam.0 == WM_KEYDOWN as usize || wparam.0 == WM_SYSKEYDOWN as usize) {
         if let Some(app) = APP.get() {
-            let _ = app.emit("keystroke", ());
+            let enter = (*(lparam.0 as *const KBDLLHOOKSTRUCT)).vkCode == VK_RETURN.0 as u32;
+            let _ = app.emit("keystroke", KeystrokePayload { enter });
         }
     }
     CallNextHookEx(None, code, wparam, lparam)
 }
 
-/// Listens for global key presses and sends a "keystroke" pulse to Tauri.
-/// Never reads or stores actual key codes or characters (zero keylogging).
+/// Listens for global key presses and sends a "keystroke" pulse to Tauri,
+/// flagged when it was Enter. Never reads or stores any other key's identity
+/// or character (no keylogging) — Enter is checked for because Mochi reacts
+/// to it differently, not because the content of what you typed matters.
 pub fn spawn_keystroke_listener(app: AppHandle) {
     let _ = APP.set(app);
     std::thread::Builder::new()

@@ -180,6 +180,13 @@ export class BotEngine {
   /** Extra canvas height above the body so hearts can fly out without clipping. */
   particleOverhang = 0;
 
+  /** Media is playing (now-playing pill reports `playing: true`): bop along. */
+  dancing = false;
+  /** Resting as the floating ball with nothing to do: drift instead of sitting dead still. */
+  floatingBall = false;
+  /** Sustained high CPU (system vitals): the ambient loop below adds the odd sweat drop. */
+  hot = false;
+
   // Mouth spring (fraction of R)
   slotH = 0; slotHTarget = 0; slotHVel = 0; isChewing = false;
 
@@ -226,7 +233,7 @@ export class BotEngine {
 
   // ── Public API ──────────────────────────────────────────────────────────────
 
-  onKeystroke() {
+  onKeystroke(enter = false) {
     const t = now();
     this.typingUntil = t + 0.8;
     if (this.typingStart === 0) this.typingStart = t;
@@ -247,6 +254,17 @@ export class BotEngine {
     // Springy squash / bob
     this.anim("sy", [[0.93, 35, Ease.out], [1.02, 50, Ease.out], [1, 60, Ease.inOut]]);
     this.anim("sx", [[1.04, 35, Ease.out], [0.98, 50, Ease.out], [1, 60, Ease.inOut]]);
+
+    // Enter is a send, not just another key: a snappier hop overrides the
+    // regular typing wobble above for this one keystroke.
+    if (enter) {
+      this.anim("oy", [[-0.22, 90, Ease.out], [0.05, 140, Ease.inOut], [0, 180, Ease.back]]);
+      this.anim("sy", [[0.86, 70, Ease.out], [1.12, 110, Ease.out], [1, 180, Ease.back]]);
+      this.anim("sx", [[1.1, 70, Ease.out], [0.94, 110, Ease.out], [1, 180, Ease.back]]);
+      this.eyeOverride = "happy";
+      this.eyeOverrideUntil = t + 0.5;
+      this.emit("spark", 2);
+    }
 
     // Reset when typing stops
     if (this.typingResetTimer != null) window.clearTimeout(this.typingResetTimer);
@@ -498,7 +516,7 @@ export class BotEngine {
       now() < this.typingUntil ||
       this.particles.length > 0 ||
       this.cfg.bounces || this.cfg.scans || this.cfg.breathes || this.cfg.zz || this.cfg.sweat ||
-      this.isMini ||
+      this.isMini || this.dancing || this.floatingBall || this.hot ||
       Math.abs(this.tgYaw - this.yaw) > 0.002 ||
       Math.abs(this.tgPitch - this.pitch) > 0.002 ||
       Math.abs(this.tgTilt - this.tilt) > 0.002 ||
@@ -578,11 +596,27 @@ export class BotEngine {
     if (n > this.waveStart && n < this.waveUntil) {
       const wt = n - this.waveStart;
       this.tgTilt = -0.06 + Math.sin(2 * Math.PI * 1.2 * wt) * 0.07;
+    } else if (this.dancing) {
+      // Head-bop on the offbeat from the body bounce below.
+      this.tgTilt = Math.sin(t * 4.6) * 0.1;
+    } else if (this.floatingBall) {
+      // A slow, lazy sway — nothing like the snap of a real reaction.
+      this.tgTilt = Math.sin(t * 0.5) * 0.06;
     }
 
-    const bounce = this.cfg.bounces ? -Math.abs(Math.sin(t * 5.2)) * 0.07 : 0;
+    const bounce = this.cfg.bounces
+      ? -Math.abs(Math.sin(t * 5.2)) * 0.07
+      : this.dancing
+        ? -Math.abs(Math.sin(t * 4.6)) * 0.1
+        : this.floatingBall
+          ? Math.sin(t * 0.7) * 0.12
+          : 0;
     const kGen = 1 - Math.pow(0.0008, dt);
     if (!this.locks.has("oy")) this.oy += (bounce - this.oy) * kGen;
+    // The ball has no window-edge cost to drifting sideways too — a slow orbit
+    // reads as floating, where a straight up-down bob alone reads as pacing.
+    const driftX = this.floatingBall ? Math.sin(t * 0.45) * 0.16 : 0;
+    if (!this.locks.has("ox")) this.ox += (driftX - this.ox) * kGen;
 
     if (this.cfg.breathes) {
       const amp = this.isMini ? 0.07 : 0.035;
@@ -591,6 +625,9 @@ export class BotEngine {
     } else if (this.isMini) {
       this.tgSy = 1 + Math.sin(t * 2.2) * 0.04;
       this.tgSx = 1 - Math.sin(t * 2.2) * 0.02;
+    } else if (this.dancing) {
+      this.tgSy = 1 + Math.sin(t * 4.6) * 0.07;
+      this.tgSx = 1 - Math.sin(t * 4.6) * 0.045;
     } else {
       this.tgSy = 1;
       this.tgSx = 1;
@@ -624,7 +661,7 @@ export class BotEngine {
     if (n - this.lastAmbient > 1.3) {
       this.lastAmbient = n;
       if (this.cfg.zz) this.emit("z", 1);
-      if (!this.isMini && this.cfg.sweat && Math.random() < 0.5) this.emit("sweat", 1);
+      if (!this.isMini && (this.cfg.sweat || this.hot) && Math.random() < 0.5) this.emit("sweat", 1);
     }
 
     for (const p of this.particles) p.age += dt;

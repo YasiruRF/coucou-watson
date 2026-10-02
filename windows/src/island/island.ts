@@ -368,10 +368,23 @@ export class Island {
     this.fsm.reveal();
   }
 
-  onKeystroke() {
+  onKeystroke(enter = false) {
     if (State.paused) return;
     this.fsm.typing();
-    this.engine.onKeystroke();
+    this.engine.onKeystroke(enter);
+    this.ensureRunning();
+  }
+
+  /** Lets other modules (integration event handlers) make Mochi react without
+   *  reaching into the engine directly. */
+  playEmote(emote: Parameters<BotEngine["triggerEmote"]>[0], duration?: number) {
+    this.engine.triggerEmote(emote, duration);
+    this.ensureRunning();
+  }
+
+  /** Sustained high CPU (system vitals pill): the odd sweat drop while it lasts. */
+  setHot(on: boolean) {
+    this.engine.hot = on;
     this.ensureRunning();
   }
 
@@ -867,6 +880,10 @@ export class Island {
     this.engine.particleOverhang = BOT_OVERHANG;
     this.engine.lookX = this.lookX();
     this.engine.lookY = this.lookY();
+    this.engine.floatingBall = State.mode === "ball";
+    this.engine.dancing = Boolean(
+      (State.integrations.integration_nowplaying?.data as Record<string, unknown> | undefined)?.playing,
+    );
     if (this.engine.morph > 0.3) {
       this.engine.slotHTarget = State.fileDragOver ? 0.2 : 0;
     } else {

@@ -142,6 +142,14 @@ problems. It stays on your machine.
   the top edge instead of hiding in a notch.
 - Permission approval works from **any** terminal; the Mac build only listens to
   VS Code sessions.
+- Two pills only exist here for now: **system vitals** (CPU, RAM, battery, polled
+  locally — no key needed) and **now playing** (title/artist/app from whatever
+  holds Windows' media controls — Spotify, a browser, anything). GitHub also
+  flags pull requests awaiting your review and the latest Actions run.
+- Mochi reacts to more here too: it bops along while something's playing, gives
+  a little hop on Enter, drifts as a floating ball when idle, sweats if the CPU
+  stays pegged, and reacts to new PRs, CI runs finishing, and the battery
+  charging or running low.
 - Not in this version: sending a file by email, dragging Mochi onto a window to
   attach it as context, and jumping to a specific terminal window — "Open
   terminal" opens the working folder in VS Code when `code` is on your `PATH`.

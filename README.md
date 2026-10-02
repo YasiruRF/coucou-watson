@@ -72,8 +72,10 @@ at Microsoft and the installer will come back once it is cleared and signed.
 Until then you can [build it from source](#build-from-source).
 
 There is no notch on a PC, so the island slides out of the top edge of the screen
-instead of hiding inside one. See [`windows/README.md`](windows/README.md) for the
-rest of the differences.
+instead of hiding inside one. Two pills are Windows-only extras: **system vitals**
+(CPU, RAM, battery — no key needed) and **now playing** (title/artist from
+Spotify, your browser, anything with media controls). See
+[`windows/README.md`](windows/README.md) for the rest of the differences.
 
 ### Linux
 
