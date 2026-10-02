@@ -90,11 +90,28 @@ const TOOL_LABELS: Record<string, string> = {
   PowerShell: "Exécute",
 };
 
+/**
+ * A `cd <dir> &&` prefix (how most agents chain a working-directory change
+ * onto the real command) can by itself exceed the 40-char display budget
+ * below, so two unrelated commands run from the same long path end up with
+ * an identical truncated label. Strip it so the step ticker actually shows
+ * the command, not the path.
+ */
+const LEADING_CD = /^\s*cd\s+(?:"[^"]*"|'[^']*'|\S+)\s*(?:&&|;)\s*/i;
+function dropLeadingCd(cmd: string): string {
+  let s = cmd;
+  for (let prev = ""; s !== prev; ) {
+    prev = s;
+    s = s.replace(LEADING_CD, "");
+  }
+  return s || cmd;
+}
+
 function stepLabel(tool: string, input: Record<string, unknown>): string {
   const label = TOOL_LABELS[tool] ?? tool;
   const str = (k: string) => (typeof input[k] === "string" ? (input[k] as string) : null);
   const cmd = str("command");
-  if (cmd) return `${label} · ${cmd.slice(0, 40)}`;
+  if (cmd) return `${label} · ${dropLeadingCd(cmd).slice(0, 40)}`;
   const path = str("path");
   if (path) return `${label} · ${lastPathComponent(path)}`;
   const file = str("file_path");
