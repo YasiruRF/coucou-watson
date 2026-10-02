@@ -44,10 +44,25 @@ mod unix;
 #[cfg(target_os = "linux")]
 use unix::connect;
 
-fn main() {
-    let Some((payload, event)) = read_event() else { std::process::exit(0) };
+struct EventInfo {
+    payload: String,
+    event: String,
+    raw_event: String,
+    agent: String,
+}
 
-    let waits_for_answer = event == "PermissionRequest";
+fn antigravity_stdout(raw_event: &str) -> &'static str {
+    if raw_event == "PreToolUse" {
+        r#"{"decision":"allow"}"#
+    } else {
+        "{}"
+    }
+}
+
+fn main() {
+    let Some(info) = read_event() else { std::process::exit(0) };
+
+    let waits_for_answer = info.event == "PermissionRequest";
     let budget = if waits_for_answer { DECISION_BUDGET } else { FIRE_AND_FORGET_BUDGET };
 
     // The worker owns every blocking call. If it overruns the budget we simply
@@ -55,6 +70,7 @@ fn main() {
     // (No catch_unwind here — the release profile is panic = "abort", so it would
     // be dead code. `talk` is written to have nothing to panic on instead.)
     let (tx, rx) = mpsc::channel::<Option<String>>();
+    let payload = info.payload.clone();
     std::thread::spawn(move || {
         let _ = tx.send(talk(&payload, waits_for_answer));
     });
@@ -64,9 +80,20 @@ fn main() {
             let mut out = std::io::stdout();
             let _ = writeln!(out, "{json}");
             let _ = out.flush();
+            std::process::exit(0);
         }
     }
-    // Nothing printed: Claude Code asks in the terminal, as if we were not here.
+
+    // Antigravity requires a valid JSON object on stdout for all hook events:
+    // PreToolUse expects `{"decision":"allow"}`, while PreInvocation, PostInvocation,
+    // PostToolUse, and Stop expect `{}`. Silence is only safe for Claude Code.
+    if info.agent == "antigravity" {
+        let mut out = std::io::stdout();
+        let _ = writeln!(out, "{}", antigravity_stdout(&info.raw_event));
+        let _ = out.flush();
+    }
+
+    // Nothing printed for Claude Code: Claude Code asks in the terminal, as if we were not here.
     std::process::exit(0);
 }
 
@@ -87,7 +114,7 @@ fn decision_json(decision: &str) -> Option<String> {
 }
 
 /// Reads stdin and returns the payload to forward plus the event name.
-fn read_event() -> Option<(String, String)> {
+fn read_event() -> Option<EventInfo> {
     let mut raw = Vec::new();
     if std::io::stdin().read_to_end(&mut raw).is_err() || raw.is_empty() {
         return None;
@@ -118,7 +145,7 @@ fn read_event() -> Option<(String, String)> {
     // Which agent this hook was installed for. Absent means Claude Code,
     // so existing hook commands keep working unchanged.
     if !agent.is_empty() {
-        map.insert("coucou_agent".into(), serde_json::Value::String(agent));
+        map.insert("coucou_agent".into(), serde_json::Value::String(agent.clone()));
     }
     let raw_event = map
         .get("hook_event_name")
@@ -179,7 +206,12 @@ fn read_event() -> Option<(String, String)> {
 
     let mut line = payload.to_string();
     line.push('\n');
-    Some((line, event))
+    Some(EventInfo {
+        payload: line,
+        event,
+        raw_event,
+        agent,
+    })
 }
 
 /// Gemini CLI and Antigravity (agy) event names → the names the island speaks.
@@ -361,5 +393,14 @@ mod tests {
         let s = v["tool_input"]["content"].as_str().unwrap();
         assert!(s.len() <= MAX_FIELD_LEN + 4);
         assert!(s.ends_with('…'));
+    }
+
+    #[test]
+    fn antigravity_output_conforms_to_contract() {
+        assert_eq!(antigravity_stdout("PreToolUse"), r#"{"decision":"allow"}"#);
+        assert_eq!(antigravity_stdout("PreInvocation"), "{}");
+        assert_eq!(antigravity_stdout("PostInvocation"), "{}");
+        assert_eq!(antigravity_stdout("PostToolUse"), "{}");
+        assert_eq!(antigravity_stdout("Stop"), "{}");
     }
 }

@@ -14,18 +14,11 @@ export class IslandStateMachine {
    * ball instead of vanishing; with a session running it still tucks away.
    */
   isIdle: () => boolean = () => false;
-  /** ball → notch delay once nobody is touching it, seconds. */
-  ballReturnDelay = 20;
-  /**
-   * Set when the ball has flown back to the notch: from then on an idle notch
-   * stays put (it neither hides nor pops out again) until something happens.
-   */
-  private restInNotch = false;
 
   /** home → petit delay, seconds. */
   homeToPetitDelay = 15;
-  /** petit → hidden delay, seconds. */
-  petitToHiddenDelay = 60;
+  /** petit → ball delay, seconds. */
+  petitToHiddenDelay = 15;
   /** coucou → petit once the greeting animation ends (no hover). */
   greetAutoCollapseDelay = 0.6;
   /** coucou → petit while the mouse hovers the greeting. */
@@ -82,7 +75,6 @@ export class IslandStateMachine {
         this.transition("petit");
         break;
       case "ball":
-        this.scheduleBallReturn();
         break;
     }
   }
@@ -104,22 +96,30 @@ export class IslandStateMachine {
     // Work started again: the ball has nothing left to wait for, back to the notch.
     if (this.state !== "hidden" && this.state !== "ball") return;
     this.cancelTimers();
-    this.restInNotch = false;
     this.transition("petit");
     this.schedulePetitHide();
+  }
+
+  /** Global keystroke: peek from hidden, extend hide timer if in petit. */
+  typing() {
+    if (this.state === "hidden") {
+      this.cancelTimers();
+      this.transition("petit");
+      this.schedulePetitHide();
+    } else if (this.state === "petit") {
+      this.schedulePetitHide();
+    }
   }
 
   /** Alert or explicit request: open straight to expanded. */
   forceHome() {
     this.cancelTimers();
-    this.restInNotch = false;
     this.transition("home");
   }
 
   /// Explicit close (OK button, Escape, click outside, an alert being answered).
   forcePetit() {
     this.cancelTimers();
-    this.restInNotch = false;
     this.transition("petit");
   }
 
@@ -128,17 +128,12 @@ export class IslandStateMachine {
     if (this.state === "ball" || this.state === "coucou") return;
     this.cancelTimers();
     this.transition("ball");
-    this.scheduleBallReturn();
   }
 
-  /**
-   * The ball was picked up and put down. It stays out while it is under the
-   * pointer and goes back to counting down once the pointer is gone.
-   */
-  ballTouched(pointerOver: boolean) {
+  /** The ball was touched: keep it as a ball. */
+  ballTouched(_pointerOver: boolean) {
     if (this.state !== "ball") return;
     this.clear("ballReturn");
-    if (!pointerOver) this.scheduleBallReturn();
   }
 
   forceHidden() {
@@ -150,26 +145,12 @@ export class IslandStateMachine {
 
   private schedulePetitHide() {
     this.clear("petitHide");
-    // A notch that already had its turn as a ball just stays where it is.
-    if (this.restInNotch && this.isIdle()) return;
     this.petitHide = window.setTimeout(() => {
       this.petitHide = null;
       if (this.state !== "petit") return;
-      // Left alone with nothing running: float out instead of disappearing.
-      const next = this.isIdle() ? "ball" : "hidden";
-      this.transition(next);
-      if (next === "ball") this.scheduleBallReturn();
+      // Inactive in notch -> float out as a ball instead of disappearing!
+      this.transition("ball");
     }, this.petitToHiddenDelay * 1000);
-  }
-
-  private scheduleBallReturn() {
-    this.clear("ballReturn");
-    this.ballReturn = window.setTimeout(() => {
-      this.ballReturn = null;
-      if (this.state !== "ball") return;
-      this.restInNotch = true;
-      this.transition("petit");
-    }, this.ballReturnDelay * 1000);
   }
 
   private scheduleHomeCollapse() {

@@ -211,6 +211,10 @@ export class BotEngine {
   private nextBlink = now() + 1.5 + Math.random() * 2;
   waveUntil = 0;
   waveStart = 0;
+  typingUntil = 0;
+  typingStart = 0;
+  private typingStep = 0;
+  private typingResetTimer: number | null = null;
   private greetToken = 0;
   private lastAmbient = 0;
   private slapTimes: number[] = [];
@@ -221,6 +225,41 @@ export class BotEngine {
   onDizzy: (() => void) | null = null;
 
   // ── Public API ──────────────────────────────────────────────────────────────
+
+  onKeystroke() {
+    const t = now();
+    this.typingUntil = t + 0.8;
+    if (this.typingStart === 0) this.typingStart = t;
+    this.typingStep = (this.typingStep + 1) % 2;
+
+    // Bring up paws for typing
+    if (this.hands < 0.95) {
+      this.anim("hands", [[1, 80, Ease.out]]);
+    }
+
+    // Rhythmic head tilt left / right with typing cadence
+    const targetTilt = this.typingStep === 0 ? -0.065 : 0.065;
+    this.anim("tilt", [[targetTilt, 50, Ease.out]]);
+
+    // Look slightly down at keyboard
+    this.anim("pitch", [[-0.08, 60, Ease.out]]);
+
+    // Springy squash / bob
+    this.anim("sy", [[0.93, 35, Ease.out], [1.02, 50, Ease.out], [1, 60, Ease.inOut]]);
+    this.anim("sx", [[1.04, 35, Ease.out], [0.98, 50, Ease.out], [1, 60, Ease.inOut]]);
+
+    // Reset when typing stops
+    if (this.typingResetTimer != null) window.clearTimeout(this.typingResetTimer);
+    this.typingResetTimer = window.setTimeout(() => {
+      this.typingResetTimer = null;
+      if (now() >= this.typingUntil) {
+        this.typingStart = 0;
+        this.anim("hands", [[0, 180, Ease.inOut]]);
+        this.anim("tilt", [[0, 140, Ease.out]]);
+        this.anim("pitch", [[0, 140, Ease.out]]);
+      }
+    }, 800);
+  }
 
   setState(next: BotStateName, force = false) {
     if (this.state === next && !force) return;
@@ -456,6 +495,7 @@ export class BotEngine {
   get busy(): boolean {
     return (
       this.tweens.size > 0 ||
+      now() < this.typingUntil ||
       this.particles.length > 0 ||
       this.cfg.bounces || this.cfg.scans || this.cfg.breathes || this.cfg.zz || this.cfg.sweat ||
       this.isMini ||
@@ -937,15 +977,16 @@ export class BotEngine {
     R: number, rx: number, ry: number, cx: number, cy: number,
   ) {
     if (this.hands <= 0.01 || this.isMini) return;
-    if (R <= 14) return; // meaningless at compact/peek sizes
-
     const n = now();
+    const isWaving = n >= this.waveStart && this.waveStart > 0 && n < this.waveUntil;
+    const isTyping = n < this.typingUntil;
+    if (R <= 7 || (R <= 14 && !isTyping)) return;
+
     const bodyH = 2 * ry;
     const hew = 0.3 * ry * this.hands;
     const heh = 0.26 * ry * this.hands;
     const hwB = rx * this.sx;
     const hhB = ry * this.sy;
-    const isWaving = n >= this.waveStart && this.waveStart > 0 && n < this.waveUntil;
 
     for (const sd of [-1, 1]) {
       let localX: number;
@@ -969,6 +1010,13 @@ export class BotEngine {
         const wt = n - this.waveStart;
         localX = -hwB * 1.08;
         localY = hhB * 0.7 + Math.sin(6 * wt) * 0.04 * bodyH;
+      } else if (isTyping) {
+        const isLeftPawDown = this.typingStep === 0;
+        const isThisPawDown = (sd < 0 && isLeftPawDown) || (sd > 0 && !isLeftPawDown);
+        const tapY = isThisPawDown ? 0.12 * bodyH : -0.06 * bodyH;
+        localX = sd * hwB * 1.0;
+        localY = hhB * 0.65 + tapY;
+        handRot = sd * (isThisPawDown ? 0.3 : -0.15);
       } else {
         localX = sd * hwB * 1.08;
         localY = hhB * 0.7;

@@ -368,6 +368,13 @@ export class Island {
     this.fsm.reveal();
   }
 
+  onKeystroke() {
+    if (State.paused) return;
+    this.fsm.typing();
+    this.engine.onKeystroke();
+    this.ensureRunning();
+  }
+
   /**
    * A press landed off the island (reported by Rust: the window is click-through
    * there). An open island folds back to the notch; an alert that is waiting for

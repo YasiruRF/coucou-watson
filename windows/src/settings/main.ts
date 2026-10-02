@@ -205,6 +205,14 @@ const CLAUDE_MODELS: ModelInfo[] = [
   { id: "claude-haiku-4-5", label: "Claude Haiku 4.5" },
 ];
 
+const DEFAULT_GEMINI_MODELS: ModelInfo[] = [
+  { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash (recommended — fast & cheap)" },
+  { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro (advanced reasoning)" },
+  { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+  { id: "gemini-1.5-flash", label: "Gemini 1.5 Flash" },
+  { id: "gemini-1.5-pro", label: "Gemini 1.5 Pro" },
+];
+
 /**
  * One provider's API key row: status dot, password field, save/remove, its own
  * feedback line. Anthropic and Google AI are two of these side by side.
@@ -270,17 +278,18 @@ function apiSection(hasAnthropicKey: boolean, hasGoogleKey: boolean, initialGoog
 
   function rebuildModelOptions() {
     clear(modelSelect);
-    const claudeGroup = h("optgroup", { label: "Claude" });
+    const googleGroup = h("optgroup", { label: "Google Gemini (recommended)" });
+    const list = googleModels.length > 0 ? googleModels : DEFAULT_GEMINI_MODELS;
+    for (const m of list) googleGroup.append(h("option", { value: m.id, text: m.label }));
+    modelSelect.append(googleGroup);
+
+    const claudeGroup = h("optgroup", { label: "Claude (Anthropic)" });
     for (const m of CLAUDE_MODELS) claudeGroup.append(h("option", { value: m.id, text: m.label }));
     modelSelect.append(claudeGroup);
-    if (googleModels.length > 0) {
-      const googleGroup = h("optgroup", { label: "Google AI — cheapest first" });
-      for (const m of googleModels) googleGroup.append(h("option", { value: m.id, text: m.label }));
-      modelSelect.append(googleGroup);
-    }
+
     // The saved model may belong to a provider with no key configured yet (or
     // whose list hasn't loaded): keep it selectable rather than silently losing it.
-    const known = [...CLAUDE_MODELS, ...googleModels].some((m) => m.id === settings.model);
+    const known = [...DEFAULT_GEMINI_MODELS, ...googleModels, ...CLAUDE_MODELS].some((m) => m.id === settings.model);
     if (!known) modelSelect.append(h("option", { value: settings.model, text: settings.model }));
     modelSelect.value = settings.model;
   }
@@ -290,17 +299,17 @@ function apiSection(hasAnthropicKey: boolean, hasGoogleKey: boolean, initialGoog
     rebuildModelOptions();
   }
 
-  const claude = apiKeyRow({
-    key: "anthropic-api-key",
-    placeholder: "sk-ant-...",
-    hasKey: hasAnthropicKey,
-    onChange: () => {},
-  });
   const google = apiKeyRow({
     key: "google-ai-api-key",
     placeholder: "AIza...",
     hasKey: hasGoogleKey,
     onChange: () => void refreshGoogleModels(),
+  });
+  const claude = apiKeyRow({
+    key: "anthropic-api-key",
+    placeholder: "sk-ant-...",
+    hasKey: hasAnthropicKey,
+    onChange: () => {},
   });
 
   modelSelect.addEventListener("change", () => {
@@ -312,14 +321,15 @@ function apiSection(hasAnthropicKey: boolean, hasGoogleKey: boolean, initialGoog
   return h(
     "section",
     {},
-    h("h2", {}, h("span", { text: "Chat" })),
-    h("div", { class: "row" }, claude.dot, h("label", { text: "Claude API key" })),
-    claude.row,
-    claude.feedback,
-    h("div", { class: "row" }, google.dot, h("label", { text: "Google AI API key" })),
+    h("h2", {}, h("span", { text: "Chat & AI Models" })),
+    h("div", { class: "row" }, google.dot, h("label", { text: "Google AI (Gemini) API key" })),
     google.row,
     google.feedback,
-    h("div", { class: "row" }, h("label", { text: "Model" }), modelSelect),
+    h("div", { class: "hint", text: "Get a free Gemini API key from Google AI Studio (aistudio.google.com). GEMINI_API_KEY environment variable is also supported." }),
+    h("div", { class: "row", style: "margin-top: 8px" }, h("label", { text: "Model" }), modelSelect),
+    h("div", { class: "row", style: "margin-top: 14px" }, claude.dot, h("label", { text: "Claude API key (optional)" })),
+    claude.row,
+    claude.feedback,
   );
 }
 

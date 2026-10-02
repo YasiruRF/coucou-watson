@@ -60,7 +60,7 @@ body {
   transform: translateX(-50%);
   width: 240px;
   height: 6px;
-  background: transparent;
+  background: rgba(0, 0, 0, 0.005);
 }
 
 /* ── Island ─────────────────────────────────────────────────────────────── */

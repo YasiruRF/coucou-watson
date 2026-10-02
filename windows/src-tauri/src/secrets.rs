@@ -27,7 +27,25 @@ fn entry(key: &str) -> Option<Entry> {
 }
 
 pub fn get(key: &str) -> Option<String> {
-    entry(key)?.get_password().ok().filter(|v| !v.is_empty())
+    if let Some(entry) = entry(key) {
+        if let Ok(val) = entry.get_password() {
+            if !val.is_empty() {
+                return Some(val);
+            }
+        }
+    }
+    if key == "google-ai-api-key" {
+        std::env::var("GEMINI_API_KEY")
+            .or_else(|_| std::env::var("GOOGLE_API_KEY"))
+            .ok()
+            .filter(|v| !v.is_empty())
+    } else if key == "anthropic-api-key" {
+        std::env::var("ANTHROPIC_API_KEY")
+            .ok()
+            .filter(|v| !v.is_empty())
+    } else {
+        None
+    }
 }
 
 pub fn set(key: &str, value: &str) -> Result<(), String> {

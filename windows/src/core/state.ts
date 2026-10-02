@@ -107,7 +107,7 @@ export const DEFAULT_SETTINGS: Settings = {
   screen: "primary",
   autostart: false,
   hooksInstalled: false,
-  model: "claude-opus-5",
+  model: "gemini-2.5-flash",
 };
 
 type Listener = () => void;

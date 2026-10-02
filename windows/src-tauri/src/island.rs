@@ -196,8 +196,14 @@ pub fn screen_info(app: &AppHandle, pref: &str) -> ScreenInfo {
 
 /// Places and sizes the window. `collapsed` picks the wake strip instead of the panel.
 pub fn apply_geometry(app: &AppHandle, pref: &str, collapsed: bool) {
-    let Some(win) = window(app) else { return };
-    let Some(m) = target_monitor(app, pref) else { return };
+    let Some(win) = window(app) else {
+        crate::log::line("apply_geometry: window(app) returned None");
+        return;
+    };
+    let Some(m) = target_monitor(app, pref) else {
+        crate::log::line(format!("apply_geometry: target_monitor(pref={pref}) returned None"));
+        return;
+    };
 
     let scale = m.scale_factor();
     let mp = *m.position();
@@ -209,11 +215,16 @@ pub fn apply_geometry(app: &AppHandle, pref: &str, collapsed: bool) {
     let x = mp.x + (ms.width as i32 - pw as i32) / 2;
     let y = mp.y;
 
-    let _ = win.set_size(PhysicalSize::new(pw, ph));
-    let _ = win.set_position(PhysicalPosition::new(x, y));
-    // Moving across displays can rescale the window: re-assert the physical size.
-    let _ = win.set_size(PhysicalSize::new(pw, ph));
-    let _ = win.set_always_on_top(true);
+    let s1 = win.set_size(PhysicalSize::new(pw, ph));
+    let p1 = win.set_position(PhysicalPosition::new(x, y));
+    let s2 = win.set_size(PhysicalSize::new(pw, ph));
+    let top = win.set_always_on_top(true);
+    let vis = win.is_visible();
+    let actual_pos = win.outer_position();
+    let actual_size = win.inner_size();
+    crate::log::line(format!(
+        "apply_geometry: collapsed={collapsed} target=({x},{y} {pw}x{ph}) scale={scale} mp={mp:?} ms={ms:?} s1={s1:?} p1={p1:?} s2={s2:?} top={top:?} vis={vis:?} actual_pos={actual_pos:?} actual_size={actual_size:?}"
+    ));
 }
 
 /// Shrinks the window to the floating ball and puts it where it was last left
@@ -239,10 +250,13 @@ pub fn apply_ball_geometry(app: &AppHandle, pref: &str, gate: &PollGate) {
         ),
     };
 
-    let _ = win.set_size(PhysicalSize::new(pw, ph));
-    let _ = win.set_position(PhysicalPosition::new(x, y));
-    let _ = win.set_size(PhysicalSize::new(pw, ph));
+    let s1 = win.set_size(PhysicalSize::new(pw, ph));
+    let p1 = win.set_position(PhysicalPosition::new(x, y));
+    let s2 = win.set_size(PhysicalSize::new(pw, ph));
     let _ = win.set_always_on_top(true);
+    crate::log::line(format!(
+        "apply_ball_geometry: target=({x},{y} {pw}x{ph}) s1={s1:?} p1={p1:?} s2={s2:?}"
+    ));
 }
 
 /// Position, size and scale of the monitor the island lives on. Any change here

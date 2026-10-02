@@ -299,6 +299,8 @@ fn apply_input_region(gw: &impl IsA<gtk::Widget>, rect: Region) {
     }
 }
 
+pub fn spawn_keystroke_listener(_app: AppHandle) {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
