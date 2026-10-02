@@ -110,7 +110,7 @@ jobs:
         run: |
           $v = "${{ steps.pack.outputs.version }}"
           $notes = @"
-          Coucou for Windows $v — Mochi at the top of your screen.
+          Coucou for Windows $v — Wato at the top of your screen.
 
           Download ``Coucou-Windows-$v-setup.exe`` and run it. The installer is not
           code-signed yet, so Windows SmartScreen shows a warning: click

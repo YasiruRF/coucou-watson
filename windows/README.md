@@ -4,7 +4,7 @@
 
 # Coucou for Windows
 
-**Mochi doesn't get a notch on a PC — so it lives at the top of your screen instead.**
+**Wato doesn't get a notch on a PC — so it lives at the top of your screen instead.**
 
 Approve Claude Code permissions, watch your session work, drop a file, chat with Claude, keep an eye on your services — without leaving what you're doing.
 
@@ -15,7 +15,7 @@ Approve Claude Code permissions, watch your session work, drop a file, chat with
 
 </div>
 
-<img src="screenshots/greeting.png" width="640" alt="Mochi waving hello at launch">
+<img src="screenshots/greeting.png" width="640" alt="Wato waving hello at launch">
 
 ---
 
@@ -31,25 +31,25 @@ installs for the current user only — no admin prompt.
 
 ## Using it
 
-<img src="screenshots/compact.png" width="292" alt="The compact island, with the integration pills as mini Mochis">
+<img src="screenshots/compact.png" width="292" alt="The compact island, with the integration pills as mini Watos">
 <img src="screenshots/overview.png" width="640" alt="The overview: the focused integration on the left, the other pills on the right">
 <img src="screenshots/approval.png" width="640" alt="A Claude Code permission request, with Deny and Allow">
 <img src="screenshots/chat.png" width="640" alt="Chatting with Claude from the island">
-<img src="screenshots/drop.png" width="640" alt="Mochi turned into a box, waiting for a file">
+<img src="screenshots/drop.png" width="640" alt="Wato turned into a box, waiting for a file">
 
 | What you do | What happens |
 |---|---|
-| Move the mouse to the very top-centre of the screen | Mochi peeks out |
+| Move the mouse to the very top-centre of the screen | Wato peeks out |
 | Click the small island | It opens |
-| Click Mochi | It gets annoyed. Three times in a row and it goes dizzy |
-| Rest the pointer on Mochi for two seconds | Hearts |
-| Drag a file onto the island | Mochi turns into a box, swallows it, then offers to answer questions about it |
+| Click Wato | It gets annoyed. Three times in a row and it goes dizzy |
+| Rest the pointer on Wato for two seconds | Hearts |
+| Drag a file onto the island | Wato turns into a box, swallows it, then offers to answer questions about it |
 | `Esc` | Closes the island |
 | Tray icon | Open, Settings…, Pause, Quit |
 
 Everything else happens on its own: a Claude Code permission request opens the
 island with **Deny / Allow**, a finished session shows what it did, and
-your integrations sit in the coloured pills next to Mochi.
+your integrations sit in the coloured pills next to Wato.
 
 ## Claude Code
 
@@ -105,13 +105,13 @@ Coucou-Windows-setup.exe          the same file under the rolling name
 
 Installing is optional — `target/release/coucou.exe` runs on its own. There is no
 window in the taskbar and no console: the island at the top of the screen and the
-Mochi in the notification area are the whole app, and Quit lives in its menu.
+Wato in the notification area are the whole app, and Quit lives in its menu.
 
 The 28 sounds are the macOS app's own files; they are never duplicated in this
 folder. The path is declared once, in `SOUNDS_DIR` at the top of
 `vite.config.ts` — when they move to `shared/sounds/`, change that one line.
 
-The app icon and the tray icon are drawn in code, like Mochi itself:
+The app icon and the tray icon are drawn in code, like Wato itself:
 
 ```powershell
 npm run icons          # regenerates src-tauri/icons from scripts/gen-icons.mjs
@@ -122,7 +122,7 @@ npm run icons          # regenerates src-tauri/icons from scripts/gen-icons.mjs
 ```
 windows/
   src/                 island front end (TypeScript, no framework)
-    mochi/             Mochi and the launch greeting, in Canvas 2D
+    wato/             Wato and the launch greeting, in Canvas 2D
     island/            state machine, hooks, integrations
     views/             every island view
     settings/          the settings window
@@ -146,11 +146,11 @@ problems. It stays on your machine.
   locally — no key needed) and **now playing** (title/artist/app from whatever
   holds Windows' media controls — Spotify, a browser, anything). GitHub also
   flags pull requests awaiting your review and the latest Actions run.
-- Mochi reacts to more here too: it bops along while something's playing, gives
+- Wato reacts to more here too: it bops along while something's playing, gives
   a little hop on Enter, drifts as a floating ball when idle, sweats if the CPU
   stays pegged, and reacts to new PRs, CI runs finishing, and the battery
   charging or running low.
-- Not in this version: sending a file by email, dragging Mochi onto a window to
+- Not in this version: sending a file by email, dragging Wato onto a window to
   attach it as context, and jumping to a specific terminal window — "Open
   terminal" opens the working folder in VS Code when `code` is on your `PATH`.
 - Cal.com shows the next bookings as a list rather than the Mac's calendar.
@@ -178,7 +178,7 @@ What changes on Linux:
   is a regular window. `COUCOU_LAYER_SHELL=0` forces that mode anywhere.
 - **Click-through** is the window's input region, kept equal to the island
   shape, so the compositor sends every other click to what is underneath.
-- **Mochi's eyes** follow the pointer only while it is over the island: Wayland
+- **Wato's eyes** follow the pointer only while it is over the island: Wayland
   gives no app the cursor position anywhere else.
 - **Claude Code hooks** go through `~/.local/share/coucou/bin/coucou-hook` and a
   Unix socket at `$XDG_RUNTIME_DIR/coucou.sock`. Both ends check that the other
@@ -187,5 +187,5 @@ What changes on Linux:
 - **Files**: preferences in `~/.config/coucou/`, the log at
   `~/.local/share/coucou/coucou.log`.
 - What the Windows build leaves out, this one does too: sending a file by
-  email, dragging Mochi onto a window, and jumping to a specific terminal
+  email, dragging Wato onto a window, and jumping to a specific terminal
   window — "Open terminal" opens the folder in VS Code.

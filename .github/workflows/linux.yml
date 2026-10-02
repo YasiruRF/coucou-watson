@@ -155,7 +155,7 @@ jobs:
           VERSION: ${{ needs.build.outputs.version }}
         run: |
           v="$VERSION"
-          notes="Coucou for Linux $v — Mochi at the top of your screen.
+          notes="Coucou for Linux $v — Wato at the top of your screen.
 
           - **AppImage** (any distribution): \`chmod +x Coucou-Linux-$v-x86_64.AppImage\` and run it.
           - **Debian / Ubuntu**: \`sudo apt install ./Coucou-Linux-$v-amd64.deb\`

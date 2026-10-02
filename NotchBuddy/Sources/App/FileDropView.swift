@@ -85,7 +85,7 @@ enum FileDropHandler {
         // Canvas timeline from drop:
         //   T_DROP → T_PROG_START : ≈1.30s  gulp + shrink + bar reveal
         //   T_PROG_START → progEnd: dur      progress bar fills
-        //   progEnd → growEnd     : 0.70s    Mochi grows back to choose position
+        //   progEnd → growEnd     : 0.70s    Wato grows back to choose position
         let preProgress = USC.T_PROG_START - USC.T_DROP  // ≈1.30s
 
         // Tick sounds — delayed to sync with canvas progress start

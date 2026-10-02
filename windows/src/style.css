@@ -75,7 +75,7 @@ body {
   will-change: width, height, transform;
 }
 
-/* Mochi floating free as a ball while nothing is running: it can be picked up
+/* Wato floating free as a ball while nothing is running: it can be picked up
    and moved, and flies back to the notch on its own. */
 #island.ball {
   cursor: grab;
@@ -176,7 +176,7 @@ body {
   transition: opacity 0.25s ease-in-out;
 }
 
-/* A mini Mochi: the slot is the body, the canvas is larger and overflows it so
+/* A mini Wato: the slot is the body, the canvas is larger and overflows it so
    hands, badges and particles are not cut off. */
 .mini {
   position: relative;

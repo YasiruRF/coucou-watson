@@ -110,7 +110,7 @@ fn relayout(app: &AppHandle, pref: &str, gate: &PollGate) {
     }
 }
 
-/// Mochi leaves the notch to float as a small ball (or comes back to the panel).
+/// Wato leaves the notch to float as a small ball (or comes back to the panel).
 /// The cursor poll keeps running either way: it is what drags the ball.
 #[tauri::command]
 fn set_ball(app: AppHandle, shared: State<Shared>, on: bool) {

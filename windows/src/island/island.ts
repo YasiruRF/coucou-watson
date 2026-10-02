@@ -1,4 +1,4 @@
-// The island: DOM shell, sizing animation, Mochi placement, mouse handling.
+// The island: DOM shell, sizing animation, Wato placement, mouse handling.
 // Mirrors IslandRootView.swift + IslandWindowController.swift.
 
 import { Tracked, Spring, clamp } from "../core/anim";
@@ -11,9 +11,9 @@ import {
 } from "../core/layout";
 import { Sound } from "../core/sound";
 import { State } from "../core/state";
-import { BotEngine, hexToRGB } from "../mochi/engine";
-import { Greeting } from "../mochi/greeting";
-import { createMiniBot, pruneMiniBots, syncMiniBotStates, tickMiniBots } from "../mochi/minibots";
+import { BotEngine, hexToRGB } from "../wato/engine";
+import { Greeting } from "../wato/greeting";
+import { createMiniBot, pruneMiniBots, syncMiniBotStates, tickMiniBots } from "../wato/minibots";
 import { UploadCanvas } from "../upload/canvas";
 import { USC, UploadSeq } from "../upload/sequence";
 import { buildHeader, buildViews, type ViewActions, type ViewHost } from "../views/views";
@@ -65,7 +65,7 @@ export class Island {
   private lastFrame = 0;
   private dirty = true;
   private canvasPx = 0;
-  /** Width of the OS window: the full panel, or the small one while Mochi is a ball. */
+  /** Width of the OS window: the full panel, or the small one while Wato is a ball. */
   private winW = PANEL_W;
 
   // Rust starts the window at full size so the launch greeting has room.
@@ -184,7 +184,7 @@ export class Island {
     for (const v of this.views.values()) this.viewsEl.append(v.el);
     this.contentEl = h("div", { id: "content" }, this.header.el, this.viewsEl);
 
-    // The drop sequence draws the card, the bar and its own Mochi. It sits under
+    // The drop sequence draws the card, the bar and its own Wato. It sits under
     // the header, which stays visible on top of it exactly as on macOS.
     this.uploadCanvas = new UploadCanvas({
       ask: () => {
@@ -375,7 +375,7 @@ export class Island {
     this.ensureRunning();
   }
 
-  /** Lets other modules (integration event handlers) make Mochi react without
+  /** Lets other modules (integration event handlers) make Wato react without
    *  reaching into the engine directly. */
   playEmote(emote: Parameters<BotEngine["triggerEmote"]>[0], duration?: number) {
     this.engine.triggerEmote(emote, duration);
@@ -454,7 +454,7 @@ export class Island {
   }
 
   /**
-   * Mochi eats the file. Nothing here waits on the file system: the copy into
+   * Wato eats the file. Nothing here waits on the file system: the copy into
    * the inbox runs in the background and swaps the path in when it lands, so a
    * slow disk can never stall the animation — same as FileDropHandler on macOS.
    */
@@ -496,7 +496,7 @@ export class Island {
 
   /**
    * Sounds and view changes hung off the canvas timeline: a `tick` every 10 %,
-   * the ✓ chime when the bar completes, then `choose` once Mochi has grown back.
+   * the ✓ chime when the bar completes, then `choose` once Wato has grown back.
    */
   private stepSequence() {
     const since = UploadSeq.sinceDrop();
@@ -790,7 +790,7 @@ export class Island {
         this.greeting.draw(gctx);
       }
     } else {
-      // Kept running even while the drop canvas is up, so the island's own Mochi
+      // Kept running even while the drop canvas is up, so the island's own Wato
       // is already in the right place the moment the canvas fades out.
       this.drawBot(dt);
     }
@@ -838,7 +838,7 @@ export class Island {
     this.botSize.target = p.diameter / 0.6;
 
     const greetingActive = State.mode === "expanded" && State.view === "greeting";
-    // The drop canvas draws its own Mochi; two of them would overlap.
+    // The drop canvas draws its own Wato; two of them would overlap.
     const visible = p.opacity > 0 && !greetingActive && !this.uploadActive;
     this.botCanvas.style.opacity = visible ? "1" : "0";
 

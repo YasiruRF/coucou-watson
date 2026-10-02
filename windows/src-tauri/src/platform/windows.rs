@@ -285,7 +285,7 @@ unsafe extern "system" fn low_level_keyboard_proc(
 
 /// Listens for global key presses and sends a "keystroke" pulse to Tauri,
 /// flagged when it was Enter. Never reads or stores any other key's identity
-/// or character (no keylogging) — Enter is checked for because Mochi reacts
+/// or character (no keylogging) — Enter is checked for because Wato reacts
 /// to it differently, not because the content of what you typed matters.
 pub fn spawn_keystroke_listener(app: AppHandle) {
     let _ = APP.set(app);

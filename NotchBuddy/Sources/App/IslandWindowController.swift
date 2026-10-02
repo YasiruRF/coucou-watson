@@ -269,7 +269,7 @@ final class IslandWindowController: NSWindowController {
             }
         }
 
-        // Ghost Mochi follows cursor + window highlight during drag (60 Hz, no throttle)
+        // Ghost Wato follows cursor + window highlight during drag (60 Hz, no throttle)
         if inAttachDrag {
             updateDragGhost()
             updateWindowHighlight()
@@ -492,7 +492,7 @@ final class IslandWindowController: NSWindowController {
         }
     }
 
-    // MARK: - Drag ghost window (Mochi follows cursor during drag)
+    // MARK: - Drag ghost window (Wato follows cursor during drag)
 
     private func showDragGhost() {
         guard dragGhostPanel == nil else { return }

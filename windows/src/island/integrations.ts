@@ -116,7 +116,7 @@ function handle(island: Island, update: IntegrationUpdate) {
 }
 
 /** A PR waiting on your review is the one thing here that actually needs you —
- *  worth a look up from Mochi, silent on the first load like every other
+ *  worth a look up from Wato, silent on the first load like every other
  *  "is this new" check in this app. */
 function reactToPullRequests(island: Island, raw: unknown) {
   const list = Array.isArray(raw) ? (raw as Record<string, unknown>[]) : [];

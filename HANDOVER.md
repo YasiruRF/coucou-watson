@@ -44,7 +44,7 @@ original `Louis-CFM/coucou` fork). Working tree is clean on commit
 
 ### 2. Floating ball + click-outside
 User asked for: clicking outside the open island folds it back to the
-notch; instead of the island just vanishing when idle, Mochi floats as a
+notch; instead of the island just vanishing when idle, Wato floats as a
 small draggable ball that auto-returns to the notch.
 
 - **New FSM state `"ball"`** in `island/fsm.ts`. `isIdle()` (wired from
@@ -79,7 +79,7 @@ small draggable ball that auto-returns to the notch.
   (`forceHome()` → `onOutsideClick()` → folds to notch; `forcePetit()` with
   no active session → auto-ballifies after the (shortened, for the test)
   timer → auto-returns and stays in the notch). Confirmed the DOM ends up
-  88×88, fully round (`border-radius: 44px`), with Mochi centered inside —
+  88×88, fully round (`border-radius: 44px`), with Wato centered inside —
   screenshot taken and matches expectations. **Not yet tested**: actually
   dragging the Rust-side window with a real mouse (the browser pane can't
   drive native window drags), and the `BallDrag`/tap-vs-drag logic beyond

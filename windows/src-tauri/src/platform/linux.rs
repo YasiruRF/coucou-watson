@@ -8,7 +8,7 @@
 //   * click-through is the window's input region, set to the island shape, so
 //     the compositor itself sends every other click to whatever is underneath;
 //   * the cursor comes from the page's own mouse events, which only fire over
-//     the island — Mochi's eyes follow the pointer there, not across the screen.
+//     the island — Wato's eyes follow the pointer there, not across the screen.
 
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};

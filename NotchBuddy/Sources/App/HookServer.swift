@@ -336,7 +336,7 @@ final class HookServer: @unchecked Sendable {
             // Non-alert work events: reveal compact only, never force-expand
             NotificationCenter.default.post(name: .hookReveal, object: nil)
         }
-        // Already compact and non-alert: Mochi state update is enough, no expand
+        // Already compact and non-alert: Wato state update is enough, no expand
     }
 
     // MARK: - Permission request (blocking — Claude Code waits for decision)

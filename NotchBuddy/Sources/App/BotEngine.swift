@@ -71,9 +71,9 @@ enum BadgeType {
     case dot(CGColor)
 }
 
-// MARK: - Mochi track constants (from PISTES.mochi)
+// MARK: - Wato track constants (from PISTES.wato)
 
-enum MochiConst {
+enum WatoConst {
     static let eyeW: CGFloat  = 0.25
     static let eyeH: CGFloat  = 0.27
     static let eyeSp: CGFloat = 0.37
@@ -799,8 +799,8 @@ final class BotEngine: ObservableObject {
         if tilt != 0 { ctx.rotate(by: .radians(tilt)) }
         ctx.scaleBy(x: sx, y: sy)
 
-        // Body path (superellipse for Mochi, morph to rect for upload)
-        let bodyPath = mochiPath(rx: rx, ry: ry, morph: morph, R: R)
+        // Body path (superellipse for Wato, morph to rect for upload)
+        let bodyPath = watoPath(rx: rx, ry: ry, morph: morph, R: R)
 
         // Body fill
         drawBody(ctx: &ctx, path: bodyPath, R: R, rx: rx, ry: ry)
@@ -862,13 +862,13 @@ final class BotEngine: ObservableObject {
         // (We'll pass world-space cx/cy to these helpers)
     }
 
-    // MARK: - Draw hands behind body (called before draw() so hands appear under Mochi)
+    // MARK: - Draw hands behind body (called before draw() so hands appear under Wato)
 
     func drawHandsBehind(context: GraphicsContext, size: CGSize) {
         guard hands > 0.01, !isMini else { return }
         let W = size.width, H = size.height
         let R = W * 0.3
-        // Only draw hands when Mochi is large enough to be meaningful (not compact/peek)
+        // Only draw hands when Wato is large enough to be meaningful (not compact/peek)
         guard R > 14 else { return }
         let rx = R * 1.14
         let ry = R * 0.88
@@ -946,8 +946,8 @@ final class BotEngine: ObservableObject {
                     endPoint: CGPoint(x: -hew * 0.8, y: heh * 0.9)
                 ))
             } else {
-                let c0 = cgColorToTuple(MochiConst.baseTop)
-                let c1 = cgColorToTuple(MochiConst.baseBottom)
+                let c0 = cgColorToTuple(WatoConst.baseTop)
+                let c1 = cgColorToTuple(WatoConst.baseBottom)
                 handCtx.fill(handPath, with: .linearGradient(
                     Gradient(colors: [colorFromTuple(c0), colorFromTuple(c1)]),
                     startPoint: CGPoint(x: hew * 0.7, y: -heh * 0.85),
@@ -980,7 +980,7 @@ final class BotEngine: ObservableObject {
 
     // MARK: - Private draw helpers
 
-    private func mochiPath(rx: CGFloat, ry: CGFloat, morph: CGFloat, R: CGFloat) -> Path {
+    private func watoPath(rx: CGFloat, ry: CGFloat, morph: CGFloat, R: CGFloat) -> Path {
         let n = 72
         let expN: CGFloat = 2.0 / 2.7
         // Target mailbox dims (spec: 1.0R wide, 0.94R tall, 0.42R corner radius)
@@ -1056,8 +1056,8 @@ final class BotEngine: ObservableObject {
             ctx.fill(path, with: .color(Color(cgColor: bc)))
         } else {
             // Main bot: linear gradient body
-            let c0 = cgColorToTuple(MochiConst.baseTop)
-            let c1 = cgColorToTuple(MochiConst.baseBottom)
+            let c0 = cgColorToTuple(WatoConst.baseTop)
+            let c1 = cgColorToTuple(WatoConst.baseBottom)
             ctx.fill(path, with: .linearGradient(
                 Gradient(colors: [colorFromTuple(c0), colorFromTuple(c1)]),
                 startPoint: CGPoint(x: rx*0.7, y: -ry*0.85),
@@ -1120,8 +1120,8 @@ final class BotEngine: ObservableObject {
         ctx.clip(to: path)
 
         for sd in [-1.0, 1.0] {
-            let eyeYaw   = CGFloat(sd) * MochiConst.eyeSp + yaw
-            var eyePitch = MochiConst.eyeP + pitch + roll
+            let eyeYaw   = CGFloat(sd) * WatoConst.eyeSp + yaw
+            var eyePitch = WatoConst.eyeP + pitch + roll
             // Wrap pitch for roll-through effect
             eyePitch = ((eyePitch + .pi).truncatingRemainder(dividingBy: .pi*2) + .pi*2).truncatingRemainder(dividingBy: .pi*2) - .pi
 
@@ -1135,8 +1135,8 @@ final class BotEngine: ObservableObject {
             let fy = lerp(max(0.18, cp),          1, morph * 0.7)
 
             let eyeMult: CGFloat = isMini ? 1.9 : 1.0
-            let ew = R * MochiConst.eyeW * es * eyeMult
-            let eh = R * MochiConst.eyeH * es * eyeMult
+            let ew = R * WatoConst.eyeW * es * eyeMult
+            let eh = R * WatoConst.eyeH * es * eyeMult
 
             var eyeCtx = ctx
             eyeCtx.translateBy(x: ex, y: ey)
@@ -1146,7 +1146,7 @@ final class BotEngine: ObservableObject {
     }
 
     private func drawEyeShape(ctx: inout GraphicsContext, shape: EyeShape, w: CGFloat, h: CGFloat, open: CGFloat, sd: CGFloat, R: CGFloat) {
-        let ink = isMini ? Color(cgColor: MochiConst.miniInk) : Color(cgColor: MochiConst.ink)
+        let ink = isMini ? Color(cgColor: WatoConst.miniInk) : Color(cgColor: WatoConst.ink)
         let now = CGFloat(CACurrentMediaTime())
 
         switch shape {

@@ -2,7 +2,7 @@
 // + IslandRootView.botPosition. All values are logical pixels, identical to the
 // macOS app's points.
 
-/** `ball`: no session is running, so Mochi floats free as a small draggable ball. */
+/** `ball`: no session is running, so Wato floats free as a small draggable ball. */
 export type IslandMode = "hidden" | "compact" | "expanded" | "ball";
 
 export type IslandViewName =
@@ -94,7 +94,7 @@ export const VIEW_LAYOUTS: Record<IslandViewName, ViewLayout> = {
 };
 
 // The upload views above are only the fallback geometry. Once a file is actually
-// dropped the whole sequence — Mochi included — is drawn by src/upload, which
+// dropped the whole sequence — Wato included — is drawn by src/upload, which
 // owns its own constants (USC) straight from UploadSequenceEngine.swift.
 
 /** Chat view grows with the conversation — IslandContainer.chatPromptHeight. */

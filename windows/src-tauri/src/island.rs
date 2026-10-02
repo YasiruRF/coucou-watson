@@ -20,7 +20,7 @@ pub const PANEL_H: f64 = 320.0;
 /// Logical size of the invisible strip that wakes the island when it is hidden.
 pub const STRIP_W: f64 = 240.0;
 pub const STRIP_H: f64 = 6.0;
-/// Logical size of the window while Mochi is a floating ball: the ball itself
+/// Logical size of the window while Wato is a floating ball: the ball itself
 /// plus room for the entry margin around it.
 pub const BALL_W: f64 = 104.0;
 pub const BALL_H: f64 = 104.0;

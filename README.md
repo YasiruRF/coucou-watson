@@ -28,21 +28,21 @@ Approve permissions, watch your agents work, drop a file, chat with Claude — a
 Some studios showed off gorgeous notch companions… and never let anyone use them.
 **Coucou is the open version.** Every line of code, every animation, every sound — free to use, read, fork and remix.
 
-Meet **Mochi**: a soft little squircle with big eyes that pops out of your notch, waves hello, follows your cursor with its eyes, gets annoyed when you poke it (and dizzy if you insist), and tells you the moment Claude Code needs you.
+Meet **Wato**: a soft little squircle with big eyes that pops out of your notch, waves hello, follows your cursor with its eyes, gets annoyed when you poke it (and dizzy if you insist), and tells you the moment Claude Code needs you.
 
 ## Features
 
-- 🤖 **Claude Code, Gemini CLI, Antigravity and other agents, live** — see every session in your notch: what it reads, edits and runs, step by step. Tag a hook payload with `coucou_agent` to give any agent its own pill (see [`docs/AGENTS.md`](docs/AGENTS.md)). Finished? Mochi does a happy little jump. Cursor and Codex pills are coming soon.
+- 🤖 **Claude Code, Gemini CLI, Antigravity and other agents, live** — see every session in your notch: what it reads, edits and runs, step by step. Tag a hook payload with `coucou_agent` to give any agent its own pill (see [`docs/AGENTS.md`](docs/AGENTS.md)). Finished? Wato does a happy little jump. Cursor and Codex pills are coming soon.
 - ✅ **Approve from the notch** — Claude Code permission requests show up with **Allow / Deny**. One click, back to work.
 - 🧑‍💻 **Jump to the right terminal** — open the exact terminal window of a session *(macOS)*.
 - 💬 **Chat with Claude, or with Gemini and OpenAI models using your own keys** *(Gemini and OpenAI: macOS)* — click the model name above the chat box to switch provider and pick a model; the list comes from each API account.
 - 📋 **Declare the tools you use** — open Settings → Active pills and choose which coding tools, agents and AI providers show up in the island. VS Code is always there; toggle Gemini CLI, Antigravity, Anthropic, Google AI, OpenAI and more. Check Cursor or Codex and you can make it your main pill, the one in the big card *(macOS)*.
-- 📎 **Drop a file on the notch** — Mochi turns into a box and swallows it, then ask a question about it or send it by email *(email: macOS, Mail.app)*.
-- 🪟 **Drag Mochi onto any window** — attach that window as context for Claude *(macOS)*.
-- 🔌 **Integrations** — Stripe payments, n8n workflows, GitHub, Vercel deployments, Resend emails, Notion, Cal.com. Each one gets its own little colored Mochi.
+- 📎 **Drop a file on the notch** — Wato turns into a box and swallows it, then ask a question about it or send it by email *(email: macOS, Mail.app)*.
+- 🪟 **Drag Wato onto any window** — attach that window as context for Claude *(macOS)*.
+- 🔌 **Integrations** — Stripe payments, n8n workflows, GitHub, Vercel deployments, Resend emails, Notion, Cal.com. Each one gets its own little colored Wato.
 - 🎭 **A real character** — idle breathing, blinks, eyes on a sphere that follow your mouse, emotes, 28 handcrafted sounds, a greeting on launch.
 - 🫥 **Invisible when idle** — hides away when nothing is running, peeks out when you hover the notch (the top edge of the screen on Windows and Linux).
-- 🖥️ **Any Mac, notch or not** — on an iMac, a Mac mini, or a MacBook with its lid closed on an external display, Mochi sits in a small bar at the top of the screen.
+- 🖥️ **Any Mac, notch or not** — on an iMac, a Mac mini, or a MacBook with its lid closed on an external display, Wato sits in a small bar at the top of the screen.
 - 🔒 **Private by design** — no telemetry, no account. Keys live in your macOS Keychain, Windows Credential Manager or Linux Secret Service (GNOME Keyring, KWallet). The app only talks to the services you plug in.
 
 <table>
@@ -145,15 +145,15 @@ If Coucou isn't running, the hook exits immediately: **Claude Code is never bloc
 
 ## Things to try
 
-| Do this | Mochi does that |
+| Do this | Wato does that |
 |---|---|
 | Hover the notch (top edge on Windows and Linux) | peeks out and says hi 👋 |
 | Click it | opens |
-| Hover Mochi | blinks, eyes grow |
-| Click Mochi | squish + annoyed |
+| Hover Wato | blinks, eyes grow |
+| Click Wato | squish + annoyed |
 | Click 3 times fast | 😵‍💫 dizzy for a few seconds |
 | Drag a file onto the island | turns into a box and swallows it |
-| Drag Mochi onto a window *(macOS)* | attaches it as context |
+| Drag Wato onto a window *(macOS)* | attaches it as context |
 | Click the model name above the chat box *(macOS)* | switch AI provider or model |
 
 ## How it works
@@ -171,7 +171,7 @@ The macOS app is native Swift 6 / SwiftUI / AppKit with **zero third-party depen
 
 **Windows**
 
-- A [Tauri 2](https://tauri.app) app (Rust + TypeScript): the island is a transparent, always-on-top window that never steals focus, Mochi is drawn in Canvas 2D with the same shapes, timings and sounds as on the Mac.
+- A [Tauri 2](https://tauri.app) app (Rust + TypeScript): the island is a transparent, always-on-top window that never steals focus, Wato is drawn in Canvas 2D with the same shapes, timings and sounds as on the Mac.
 - Claude Code hooks go through a tiny `coucou-hook.exe` and a named pipe; keys live in Windows Credential Manager.
 - Details and differences in [`windows/README.md`](windows/README.md).
 
@@ -194,11 +194,11 @@ Inspired by the notch-companion concepts shared by design studios — this proje
 ## License
 
 - **Code:** [MIT](LICENSE) — use it, fork it, learn from it, just keep the copyright notice.
-- **Name, Mochi character, icon, sounds and media:** © Louis Raillé, all rights reserved — see [LICENSE-ASSETS.md](LICENSE-ASSETS.md). Shipping your own fork? Give it your own name and character.
+- **Name, Wato character, icon, sounds and media:** © Louis Raillé, all rights reserved — see [LICENSE-ASSETS.md](LICENSE-ASSETS.md). Shipping your own fork? Give it your own name and character.
 
 <div align="center">
 
-**If Mochi made you smile, a ⭐ helps a lot.**
+**If Wato made you smile, a ⭐ helps a lot.**
 
 [Website](https://louis-cfm.github.io/coucou/) · [Privacy](https://louis-cfm.github.io/coucou/privacy.html) · [Terms](https://louis-cfm.github.io/coucou/terms.html) · [Support](https://louis-cfm.github.io/coucou/support.html)
 
